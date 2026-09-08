@@ -1,6 +1,6 @@
 /** One element → its schema-shaped identity + styles + bbox. Phase 4 adds comments/queue. */
 
-import type { ElementIdentity } from "@uigrep/schema";
+import type { ElementIdentity, FilteredComputedStyle } from "@uigrep/schema";
 import { boundingBoxSchema, elementIdentitySchema } from "@uigrep/schema";
 import { buildSelector } from "./selector";
 import { buildXPath } from "./xpath";
@@ -8,7 +8,7 @@ import { captureComputedStyle } from "./styles";
 
 export interface ElementCapture {
   identity: ElementIdentity;
-  computedStyle: Record<string, string>;
+  computedStyle: FilteredComputedStyle["properties"];
 }
 
 export function captureElement(el: Element): ElementCapture {

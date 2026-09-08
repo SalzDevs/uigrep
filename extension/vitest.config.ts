@@ -1,3 +1,4 @@
+import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -7,7 +8,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@uigrep/schema": "../packages/schema/src/index.ts",
+      "@uigrep/schema": path.resolve(
+        import.meta.dirname,
+        "../packages/schema/src/index.ts",
+      ),
     },
   },
 });

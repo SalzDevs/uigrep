@@ -14,10 +14,11 @@ export interface CropRequest {
 
 export default defineBackground(() => {
   browser.commands?.onCommand.addListener((command) => {
-    if (command === "toggle-pick") void togglePickInActiveTab();
+    if (command === "toggle-pick") void sendToActiveTab("uigrep:toggle-pick");
+    if (command === "toggle-panel") void sendToActiveTab("uigrep:toggle-panel");
   });
 
-  browser.action?.onClicked.addListener(() => void togglePickInActiveTab());
+  browser.action?.onClicked.addListener(() => void sendToActiveTab("uigrep:toggle-pick"));
 
   browser.runtime.onMessage.addListener(
     (message: CropRequest, _sender, sendResponse) => {
@@ -32,13 +33,13 @@ export default defineBackground(() => {
   );
 });
 
-async function togglePickInActiveTab(): Promise<void> {
+async function sendToActiveTab(type: string): Promise<void> {
   const [tab] = await browser.tabs.query({
     active: true,
     currentWindow: true,
   });
   if (!tab.id) return;
-  await browser.tabs.sendMessage(tab.id, { type: "uigrep:toggle-pick" });
+  await browser.tabs.sendMessage(tab.id, { type });
 }
 
 async function cropScreenshot(

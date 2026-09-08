@@ -56,9 +56,18 @@ export const FILTERED_COMPUTED_STYLE_PROPERTIES = [
 ] as const;
 
 export const filteredComputedStyleSchema = z.object({
-  properties: z.record(
-    z.enum(FILTERED_COMPUTED_STYLE_PROPERTIES),
-    z.string(),
-  ),
+  properties: z
+    .custom<
+      Partial<
+        Record<(typeof FILTERED_COMPUTED_STYLE_PROPERTIES)[number], string>
+      >
+    >()
+    .refine(
+      (properties) =>
+        Object.keys(properties).every((key) =>
+          (FILTERED_COMPUTED_STYLE_PROPERTIES as readonly string[]).includes(key),
+        ),
+      { message: "unknown computed style property" },
+    ),
 });
 export type FilteredComputedStyle = z.infer<typeof filteredComputedStyleSchema>;

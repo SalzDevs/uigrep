@@ -11,6 +11,10 @@ export default defineConfig({
         suggested_key: { default: "Alt+Shift+U" },
         description: "Toggle uigrep element picking",
       },
+      "toggle-panel": {
+        suggested_key: { default: "Alt+Shift+P" },
+        description: "Toggle uigrep review queue",
+      },
     },
     icons: {},
   },
