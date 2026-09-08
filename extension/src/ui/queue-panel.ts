@@ -12,6 +12,12 @@ export interface QueuePanelOptions {
   onSend(session: FeedbackSession): Promise<void>;
   onDelete(annotationId: string): Promise<void>;
   onHighlight(annotation: Annotation): void;
+  /** Pull server-side statuses before each render (verify loop sync) */
+  syncStatuses(): Promise<void>;
+  /** Human confirms fixed → re-capture evidence, mark verified */
+  onVerify(annotation: Annotation): Promise<void>;
+  /** Human says still broken → re-capture, reopen for the agent */
+  onReopen(annotation: Annotation): Promise<void>;
 }
 
 const STATUS_ORDER: Record<Annotation["status"], number> = {
@@ -60,6 +66,7 @@ export class QueuePanel {
   private async render(): Promise<void> {
     const root = this.ui!.root;
     root.querySelectorAll(".ug-panel").forEach((el) => el.remove());
+    await this.options.syncStatuses();
     const session = await this.options.getSession();
 
     const panel = document.createElement("div");
@@ -82,18 +89,27 @@ export class QueuePanel {
         annotations.length === 0
           ? `<div class="ug-empty">No annotations yet.<br>Press Alt+Shift+U and click an element.</div>`
           : `<ul class="ug-list">${annotations
-              .map(
-                (a) => `
+              .map((a) => {
+                const actions =
+                  a.status === "fixed"
+                    ? `
+                <div style="display:flex;gap:6px;margin-top:6px">
+                  <button class="ug-btn ug-btn-primary" style="padding:4px 10px;font-size:11px" data-act="verify" data-id="${a.id}">✓ Fixed</button>
+                  <button class="ug-btn ug-btn-ghost" style="padding:4px 10px;font-size:11px" data-act="reopen" data-id="${a.id}">Still broken</button>
+                </div>`
+                    : "";
+                return `
             <li class="ug-item" data-id="${a.id}">
               <img class="ug-thumb" src="${a.screenshot}" alt="">
               <div class="ug-body">
                 <span class="ug-status" data-status="${a.status}">${a.status}</span>
                 <span class="ug-selector" title="${a.element.selector}">${a.element.selector}</span>
                 <div class="ug-comment">${escapeHtml(a.comment)}</div>
+                ${actions}
               </div>
               <button class="ug-del" title="Delete">✕</button>
-            </li>`,
-              )
+            </li>`;
+              })
               .join("")}</ul>`
       }
       <div class="ug-footer">
@@ -119,7 +135,22 @@ export class QueuePanel {
       if (target.classList.contains("ug-del") && annotation) {
         await this.options.onDelete(id);
         await this.render();
-      } else if (annotation) {
+        return;
+      }
+      if (annotation && act === "verify") {
+        target.setAttribute("disabled", "true");
+        target.textContent = "verifying…";
+        await this.options.onVerify(annotation);
+        await this.render();
+        return;
+      }
+      if (annotation && act === "reopen") {
+        target.setAttribute("disabled", "true");
+        await this.options.onReopen(annotation);
+        await this.render();
+        return;
+      }
+      if (annotation) {
         this.options.onHighlight(annotation);
       }
     });

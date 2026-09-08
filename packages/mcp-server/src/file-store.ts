@@ -73,4 +73,24 @@ export class FileFeedbackStore extends InMemoryFeedbackStore {
     await super.markVerified(annotationId);
     this.persist();
   }
+
+  override async allStatuses() {
+    await this.load();
+    return super.allStatuses();
+  }
+
+  override async attachAfterScreenshot(
+    annotationId: string,
+    afterScreenshot: string,
+  ): Promise<void> {
+    await this.load();
+    await super.attachAfterScreenshot(annotationId, afterScreenshot);
+    this.persist();
+  }
+
+  override async reopen(annotationId: string): Promise<void> {
+    await this.load();
+    await super.reopen(annotationId);
+    this.persist();
+  }
 }

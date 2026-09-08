@@ -150,6 +150,68 @@ export async function removeAnnotation(annotationId: string): Promise<void> {
   await writeIndex(index);
 }
 
+/** Generic patch — used by status sync and verify evidence updates. */
+export async function updateAnnotationFields(
+  annotationId: string,
+  patch: Partial<Pick<Annotation, "status" | "screenshot" | "afterScreenshot" | "iteration">>,
+): Promise<void> {
+  const index = await readIndex();
+  for (const [, session] of Object.entries(index)) {
+    const idx = session.annotations.findIndex((a) => a.id === annotationId);
+    if (idx === -1) continue;
+    const annotations = [...session.annotations];
+    annotations[idx] = annotationSchema.parse({
+      ...annotations[idx],
+      ...patch,
+      updatedAt: nowIso(),
+    });
+    await writeIndex({
+      ...index,
+      [sessionKeyFor(session.url)]: {
+        ...session,
+        annotations,
+        updatedAt: nowIso(),
+      },
+    });
+    return;
+  }
+  throw new Error(`Unknown annotation: ${annotationId}`);
+}
+
+/**
+ * Server = source of truth for sent → fixed transitions (the agent's
+ * mark_fixed never touches browser storage). Merge its statuses in.
+ */
+export async function mergeServerStatuses(
+  statuses: Record<string, { status: AnnotationStatus; afterScreenshot?: string; iteration?: number }>,
+): Promise<number> {
+  const index = await readIndex();
+  let merged = 0;
+  for (const [, session] of Object.entries(index)) {
+    const annotations = session.annotations.map((a) => {
+      const server = statuses[a.id];
+      if (!server || server.status === a.status) return a;
+      merged++;
+      return annotationSchema.parse({
+        ...a,
+        status: server.status,
+        iteration: server.iteration ?? a.iteration,
+        ...(server.afterScreenshot
+          ? { afterScreenshot: server.afterScreenshot }
+          : {}),
+        updatedAt: nowIso(),
+      });
+    });
+    index[sessionKeyFor(session.url)] = {
+      ...session,
+      annotations,
+      updatedAt: nowIso(),
+    };
+  }
+  await writeIndex(index);
+  return merged;
+}
+
 /**
  * Marks every open annotation in the session as sent — batch delivery
  * (decision 6). Called by phase 5's transport bridge on successful push.

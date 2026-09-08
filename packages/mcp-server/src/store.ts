@@ -20,6 +20,12 @@ export interface FeedbackStore {
   dismiss(annotationId: string): Promise<void>;
   /** Extension verify flow: re-capture evidence → status "verified" */
   markVerified(annotationId: string): Promise<void>;
+  /** Extension sync: every annotation's current server-side status */
+  allStatuses(): Promise<Record<string, { status: string; afterScreenshot?: string; iteration: number }>>;
+  /** Human confirmed fixed via extension verify button; evidence attached */
+  attachAfterScreenshot(annotationId: string, afterScreenshot: string): Promise<void>;
+  /** Human says still broken → back to open, iteration++, agent sees it again */
+  reopen(annotationId: string): Promise<void>;
 }
 
 export class InMemoryFeedbackStore implements FeedbackStore {
@@ -62,6 +68,43 @@ export class InMemoryFeedbackStore implements FeedbackStore {
     this.updateAnnotation(annotationId, (a) => ({
       ...a,
       status: "verified",
+      updatedAt: new Date().toISOString(),
+    }));
+  }
+
+  async allStatuses(): Promise<
+    Record<string, { status: string; afterScreenshot?: string; iteration: number }>
+  > {
+    const out: Record<string, { status: string; afterScreenshot?: string; iteration: number }> = {};
+    for (const session of this.sessions.values()) {
+      for (const a of session.annotations) {
+        out[a.id] = {
+          status: a.status,
+          iteration: a.iteration,
+          ...(a.afterScreenshot ? { afterScreenshot: a.afterScreenshot } : {}),
+        };
+      }
+    }
+    return out;
+  }
+
+  async attachAfterScreenshot(
+    annotationId: string,
+    afterScreenshot: string,
+  ): Promise<void> {
+    this.updateAnnotation(annotationId, (a) => ({
+      ...a,
+      afterScreenshot,
+      updatedAt: new Date().toISOString(),
+    }));
+  }
+
+  async reopen(annotationId: string): Promise<void> {
+    this.updateAnnotation(annotationId, (a) => ({
+      ...a,
+      status: "open",
+      iteration: a.iteration + 1,
+      afterScreenshot: undefined,
       updatedAt: new Date().toISOString(),
     }));
   }

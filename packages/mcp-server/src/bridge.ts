@@ -53,6 +53,58 @@ export function createBridgeServer(store: FeedbackStore, port = DEFAULT_BRIDGE_P
       return;
     }
 
+    if (req.method === "GET" && req.url === "/statuses") {
+      // Extension polls this to sync server-side transitions (sent → fixed).
+      const all = await store.allStatuses();
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(all));
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/verify") {
+      try {
+        const body = await readBody(req);
+        const { annotationId, afterScreenshot } = JSON.parse(body) as {
+          annotationId: string;
+          afterScreenshot?: string;
+        };
+        await store.markVerified(annotationId);
+        if (afterScreenshot) {
+          await store.attachAfterScreenshot(annotationId, afterScreenshot);
+        }
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/reopen") {
+      try {
+        const body = await readBody(req);
+        const { annotationId } = JSON.parse(body) as { annotationId: string };
+        await store.reopen(annotationId);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+      return;
+    }
+
     res.writeHead(404, { "content-type": "application/json" });
     res.end(JSON.stringify({ ok: false, error: "not found" }));
   });

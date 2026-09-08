@@ -17,6 +17,12 @@ export interface SendSessionRequest {
   session: unknown; // validated against schema at the bridge
 }
 
+export interface BridgePostRequest {
+  type: "uigrep:bridge-post";
+  path: "/verify" | "/reopen" | "/statuses";
+  body?: unknown;
+}
+
 const BRIDGE_URL = "http://127.0.0.1:8742";
 
 export default defineBackground(() => {
@@ -28,7 +34,7 @@ export default defineBackground(() => {
   browser.action?.onClicked.addListener(() => void sendToActiveTab("uigrep:toggle-pick"));
 
   browser.runtime.onMessage.addListener(
-    (message: CropRequest | SendSessionRequest, _sender, sendResponse) => {
+    (message: CropRequest | SendSessionRequest | BridgePostRequest, _sender, sendResponse) => {
       if (message?.type === "uigrep:crop-screenshot") {
         void cropScreenshot(message.bbox, message.devicePixelRatio).then(
           (dataUrl) => sendResponse({ dataUrl }),
@@ -37,6 +43,12 @@ export default defineBackground(() => {
       }
       if (message?.type === "uigrep:send-session") {
         void pushSession(message.session).then((result) =>
+          sendResponse(result),
+        );
+        return true;
+      }
+      if (message?.type === "uigrep:bridge-post") {
+        void bridgeRequest(message.path, message.body).then((result) =>
           sendResponse(result),
         );
         return true;
@@ -53,6 +65,26 @@ async function sendToActiveTab(type: string): Promise<void> {
   });
   if (!tab.id) return;
   await browser.tabs.sendMessage(tab.id, { type });
+}
+
+async function bridgeRequest(
+  path: string,
+  body?: unknown,
+): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  try {
+    const res = await fetch(`${BRIDGE_URL}${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: body === undefined ? {} : { "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, error: (data as { error?: string }).error ?? `HTTP ${res.status}` };
+    }
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 async function pushSession(

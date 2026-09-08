@@ -10,11 +10,18 @@ import {
   addAnnotation,
   getSession,
   markSessionSent,
+  mergeServerStatuses,
   removeAnnotation,
+  updateAnnotationFields,
 } from "@/src/queue";
+import { recaptureElement } from "@/src/verify";
 import { showAnnotatePopup } from "@/src/ui/annotate-popup";
 import { QueuePanel } from "@/src/ui/queue-panel";
-import type { CropRequest, SendSessionRequest } from "@/entrypoints/background";
+import type {
+  BridgePostRequest,
+  CropRequest,
+  SendSessionRequest,
+} from "@/entrypoints/background";
 
 export default defineContentScript({
   matches: ["<all_urls>"],
@@ -25,6 +32,9 @@ export default defineContentScript({
       onSend: (session) => sendSession(session, panel),
       onDelete: (id) => removeAnnotation(id),
       onHighlight: (annotation) => highlight(annotation),
+      syncStatuses: () => syncFromBridge(),
+      onVerify: (annotation) => verifyAnnotation(annotation),
+      onReopen: (annotation) => reopenAnnotation(annotation),
     });
 
     let eventCoordinates = { x: 0, y: 0 };
@@ -110,6 +120,67 @@ export default defineContentScript({
     }
   },
 });
+
+function bridgePost(path: BridgePostRequest["path"], body?: unknown): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  const request: BridgePostRequest = { type: "uigrep:bridge-post", path, body };
+  return new Promise((resolve) => {
+    browser.runtime.sendMessage(request, resolve);
+  });
+}
+
+async function syncFromBridge(): Promise<void> {
+  const result = await bridgePost("/statuses");
+  if (result.ok && result.data) {
+    await mergeServerStatuses(
+      result.data as Record<string, { status: import("@uigrep/schema").AnnotationStatus; afterScreenshot?: string; iteration?: number }>,
+    );
+  }
+  // bridge down → keep local state, panel still usable
+}
+
+async function verifyAnnotation(annotation: import("@uigrep/schema").Annotation): Promise<void> {
+  const recapture = await recaptureElement(
+    annotation.element.selector,
+    annotation.element.xpath,
+  );
+  if (!recapture) {
+    alert(
+      "uigrep: could not find this element on the page anymore.\nNavigate to the state where it exists, then verify again.",
+    );
+    return;
+  }
+  const result = await bridgePost("/verify", {
+    annotationId: annotation.id,
+    afterScreenshot: recapture.screenshot,
+  });
+  if (!result.ok) {
+    alert(`uigrep: verify failed\n\n${result.error}`);
+    return;
+  }
+  await updateAnnotationFields(annotation.id, {
+    status: "verified",
+    afterScreenshot: recapture.screenshot,
+  });
+}
+
+async function reopenAnnotation(annotation: import("@uigrep/schema").Annotation): Promise<void> {
+  // fresh screenshot of the still-broken element → agent sees current state
+  const recapture = await recaptureElement(
+    annotation.element.selector,
+    annotation.element.xpath,
+  );
+  const result = await bridgePost("/reopen", {
+    annotationId: annotation.id,
+  });
+  if (!result.ok) {
+    alert(`uigrep: reopen failed\n\n${result.error}`);
+    return;
+  }
+  await updateAnnotationFields(annotation.id, {
+    status: "open",
+    ...(recapture ? { screenshot: recapture.screenshot } : {}),
+  });
+}
 
 async function sendSession(
   session: import("@uigrep/schema").FeedbackSession,
