@@ -1,0 +1,14 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    "types": ["wxt/browser", "vitest/globals"],
+    "paths": {
+      "@": ["."],
+      "@/*": ["./*"],
+      "~": ["."],
+      "~/*": ["./*"],
+      "@uigrep/schema": ["../packages/schema/src/index.ts"]
+    }
+  }
+}

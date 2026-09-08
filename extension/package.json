@@ -1,0 +1,24 @@
+{
+  "name": "@uigrep/extension",
+  "version": "0.0.1",
+  "description": "uigrep browser extension — select UI elements, annotate, cue your agent",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "prepare": "wxt prepare",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "test": "vitest run",
+    "build:check": "wxt build"
+  },
+  "dependencies": {
+    "@uigrep/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.14.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "wxt": "^0.20.0"
+  }
+}
