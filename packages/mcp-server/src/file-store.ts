@@ -17,8 +17,8 @@ export class FileFeedbackStore extends InMemoryFeedbackStore {
 
   constructor(filePath?: string) {
     super();
-    this.filePath =
-      filePath ?? join(homedir(), ".uigrep", "feedback.json");
+    const home = process.env.UIGREP_HOME_DIR ?? homedir();
+    this.filePath = filePath ?? join(home, ".uigrep", "feedback.json");
   }
 
   async load(): Promise<void> {

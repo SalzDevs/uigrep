@@ -17,14 +17,21 @@ computed styles that matter, the element screenshot, and your intent.
 
 ## Status
 
-**Phase 1 — payload contract.** Monorepo scaffold + Zod schema. See
-[CONTEXT.md](./CONTEXT.md) for the full decision log and roadmap.
+**Phases 1–6 built. Phase 7 (E2E demo) in progress.**
+
+- Payload contract (`packages/schema`) — Zod, 11 tests
+- MCP server (`packages/mcp-server`) — `get_feedback` / `mark_fixed`, localhost bridge, file persistence, 22 tests incl. real stdio E2E
+- Extension (`extension/`) — pick mode, annotate popup, review queue, send, verify loop, 20 tests
+- Full loop verified: annotate → send → agent pulls → fixes → human verifies/reopens
+
+See [DEMO.md](./DEMO.md) to run it end to end, and [CONTEXT.md](./CONTEXT.md) for the decision log.
 
 ## Layout
 
 - `packages/schema` — the payload contract (Zod). Everything else consumes it.
-- `extension/` — Chrome extension (Manifest V3, TypeScript, WXT) — phase 3
-- `packages/mcp-server/` — local MCP server — phase 2
+- `packages/mcp-server/` — local MCP server + HTTP bridge
+- `extension/` — Chrome extension (Manifest V3, TypeScript, WXT)
+- `demo/` — static pricing page with 3 planted UI bugs for the demo
 
 ## License
 
