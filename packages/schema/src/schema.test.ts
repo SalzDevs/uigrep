@@ -3,7 +3,7 @@ import {
   annotationSchema,
   elementIdentitySchema,
   feedbackSessionSchema,
-} from "./index.js";
+} from "./index.ts";
 
 const validAnnotation = {
   id: "a1",

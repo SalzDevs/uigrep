@@ -4,9 +4,9 @@
  */
 
 import { z } from "zod";
-import { elementIdentitySchema } from "./element.js";
-import { filteredComputedStyleSchema } from "./styles.js";
-import { frameworkHintsSchema } from "./hints.js";
+import { elementIdentitySchema } from "./element.ts";
+import { filteredComputedStyleSchema } from "./styles.ts";
+import { frameworkHintsSchema } from "./hints.ts";
 
 export const annotationStatusSchema = z.enum([
   "open", // reported, not yet addressed

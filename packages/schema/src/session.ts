@@ -4,8 +4,8 @@
  */
 
 import { z } from "zod";
-import { annotationSchema } from "./annotation.js";
-import { frameworkHintsSchema } from "./hints.js";
+import { annotationSchema } from "./annotation.ts";
+import { frameworkHintsSchema } from "./hints.ts";
 
 export const viewportSchema = z.object({
   width: z.number().int().positive(),

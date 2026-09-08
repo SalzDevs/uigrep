@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FeedbackSession } from "@uigrep/schema";
-import { InMemoryFeedbackStore } from "./store.js";
+import { InMemoryFeedbackStore } from "./store.ts";
 
 function makeSession(overrides: Partial<FeedbackSession> = {}): FeedbackSession {
   return {

@@ -6,18 +6,23 @@
 import { captureElement } from "@/src/capture";
 import { detectFrameworkHints } from "@/src/hints";
 import { PickMode } from "@/src/pick-mode";
-import { addAnnotation, getSession, removeAnnotation } from "@/src/queue";
+import {
+  addAnnotation,
+  getSession,
+  markSessionSent,
+  removeAnnotation,
+} from "@/src/queue";
 import { showAnnotatePopup } from "@/src/ui/annotate-popup";
 import { QueuePanel } from "@/src/ui/queue-panel";
-import type { CropRequest } from "@/entrypoints/background";
+import type { CropRequest, SendSessionRequest } from "@/entrypoints/background";
 
 export default defineContentScript({
   matches: ["<all_urls>"],
   runAt: "document_idle",
   main() {
-    const panel = new QueuePanel({
+    const panel: QueuePanel = new QueuePanel({
       getSession: () => getSession(location.href),
-      onSend: (session) => sendSession(session),
+      onSend: (session) => sendSession(session, panel),
       onDelete: (id) => removeAnnotation(id),
       onHighlight: (annotation) => highlight(annotation),
     });
@@ -106,12 +111,31 @@ export default defineContentScript({
   },
 });
 
-async function sendSession(session: import("@uigrep/schema").FeedbackSession): Promise<void> {
+async function sendSession(
+  session: import("@uigrep/schema").FeedbackSession,
+  panel: QueuePanel,
+): Promise<void> {
   // Validate the full session against the contract before anything leaves.
   const { feedbackSessionSchema } = await import("@uigrep/schema");
   const parsed = feedbackSessionSchema.parse(session);
-  console.log("[uigrep] session ready for delivery (phase 5 wires the bridge):", parsed);
-  alert("uigrep: session validated ✓ — transport bridge lands in phase 5. Payload logged to console.");
+  const request: SendSessionRequest = {
+    type: "uigrep:send-session",
+    session: parsed,
+  };
+  const result = await new Promise<{ ok: boolean; error?: string }>(
+    (resolve) => {
+      browser.runtime.sendMessage(request, resolve);
+    },
+  );
+  if (result.ok) {
+    await markSessionSent(location.href);
+    await panel.refresh();
+    console.log("[uigrep] session delivered to MCP bridge ✓", parsed.id);
+  } else {
+    alert(
+      `uigrep: could not reach the MCP bridge\n\n${result.error}\n\nStart it with: pnpm --filter @uigrep/mcp-server start`,
+    );
+  }
 }
 
 function requestScreenshot(

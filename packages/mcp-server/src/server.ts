@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { InMemoryFeedbackStore, type FeedbackStore } from "./store.js";
-import { registerTools } from "./tools.js";
+import { InMemoryFeedbackStore, type FeedbackStore } from "./store.ts";
+import { registerTools } from "./tools.ts";
 
 export function createUigrepServer(store?: FeedbackStore): McpServer {
   const server = new McpServer({

@@ -10,7 +10,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { FeedbackStore } from "./store.js";
+import type { FeedbackStore } from "./store.ts";
 
 export function registerTools(server: McpServer, store: FeedbackStore): void {
   server.tool(
