@@ -1,8 +1,11 @@
 {
   "name": "@uigrep/mcp",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "description": "MCP stdio adapter for uigrep — retrieve UI capture context in coding agents",
+  "license": "MIT",
+  "files": ["dist"],
+  "publishConfig": { "access": "public" },
   "bin": {
     "uigrep-mcp": "./dist/index.js"
   },

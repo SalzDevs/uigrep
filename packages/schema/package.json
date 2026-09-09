@@ -1,8 +1,11 @@
 {
   "name": "@uigrep/schema",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "description": "Canonical capture contracts and budgets for uigrep",
+  "license": "MIT",
+  "files": ["dist"],
+  "publishConfig": { "access": "public" },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
