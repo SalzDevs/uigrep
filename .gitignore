@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+.output/
+*.tsbuildinfo
+
+# rust / tauri
+target/
+gen/schemas/
+
+# extension build artifacts
+apps/extension/.output/
+apps/extension/.wxt/
+
+# environment
+.env
+.env.*
+
+# os
+.DS_Store
+Thumbs.db
+
+# editors
+*.swp
+.idea/
+.vscode/
