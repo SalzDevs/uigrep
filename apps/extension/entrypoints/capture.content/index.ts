@@ -219,8 +219,10 @@ class CaptureOverlay {
   }
 
   public destroy(): void {
+    if (this.resizeTimer) window.clearTimeout(this.resizeTimer);
     document.removeEventListener("keydown", this.onKeydown, true);
     window.removeEventListener("scroll", this.onScroll, true);
+    window.removeEventListener("resize", this.onResize);
     this.host.remove();
   }
 
@@ -253,9 +255,59 @@ class CaptureOverlay {
     });
     document.addEventListener("keydown", this.onKeydown, true);
     window.addEventListener("scroll", this.onScroll, true);
+    window.addEventListener("resize", this.onResize);
   }
 
+  private resizeTimer: number | undefined;
+
   private readonly onScroll = (): void => this.render();
+
+  private readonly onResize = (): void => {
+    if (this.resizeTimer) window.clearTimeout(this.resizeTimer);
+    this.resizeTimer = window.setTimeout(() => this.reanchorAnnotations(), 120);
+  };
+
+  /** After reflow, snap each outline back onto its element by re-resolving selectors. */
+  private reanchorAnnotations(): void {
+    for (const annotation of this.annotations) {
+      let best: { rect: Rect; distance: number } | undefined;
+      const centerX = annotation.viewportRect.x + annotation.viewportRect.width / 2;
+      const centerY = annotation.viewportRect.y + annotation.viewportRect.height / 2;
+      for (const target of annotation.targets) {
+        let element: Element | null = null;
+        try {
+          if (target.selectors.testId)
+            element = document.querySelector(
+              `[data-testid="${CSS.escape(target.selectors.testId)}"]`,
+            );
+          if (!element && target.selectors.id)
+            element = document.getElementById(target.selectors.id);
+          if (!element && target.selectors.css)
+            element = document.querySelector(target.selectors.css);
+        } catch {
+          element = null;
+        }
+        if (!element) continue;
+        const box = element.getBoundingClientRect();
+        if (box.width < 2 || box.height < 2) continue;
+        const distance = Math.hypot(
+          box.x + box.width / 2 - centerX,
+          box.y + box.height / 2 - centerY,
+        );
+        if (!best || distance < best.distance)
+          best = { rect: { x: box.x, y: box.y, width: box.width, height: box.height }, distance };
+      }
+      if (best && best.distance < 400) {
+        annotation.viewportRect = best.rect;
+        annotation.pageRect = {
+          ...best.rect,
+          x: best.rect.x + scrollX,
+          y: best.rect.y + scrollY,
+        };
+      }
+    }
+    this.render();
+  }
 
   private readonly onKeydown = (event: KeyboardEvent): void => {
     if (event.key === "Escape") this.destroy();
