@@ -8,7 +8,6 @@ import {
 import type { BackgroundRequest, ContentRequest } from "../../lib/messages";
 
 const OVERLAY_ID = "uigrep-overlay-host";
-const CLICK_THRESHOLD = 5;
 const MAX_SCANNED_ELEMENTS = 5_000;
 const STYLE_PROPERTIES = [
   "display",
@@ -165,9 +164,8 @@ function targetFor(
   };
 }
 
-function candidatesFor(rect: Rect, clicked?: Element): TargetCandidate[] {
+function candidatesFor(rect: Rect): TargetCandidate[] {
   const elements: Element[] = [];
-  if (clicked) elements.push(clicked);
   const walker = document.createTreeWalker(
     document.body,
     NodeFilter.SHOW_ELEMENT,
@@ -249,42 +247,15 @@ class CaptureOverlay {
       if (!this.drag) return;
       const drag = this.drag;
       this.drag = undefined;
-      const distance = Math.hypot(
-        event.clientX - drag.startX,
-        event.clientY - drag.startY,
-      );
-      const clicked =
-        distance < CLICK_THRESHOLD
-          ? this.elementBelowOverlay(event.clientX, event.clientY)
-          : undefined;
-      const clickRect = clicked?.getBoundingClientRect();
-      const rect = clickRect
-        ? {
-            x: clickRect.x,
-            y: clickRect.y,
-            width: clickRect.width,
-            height: clickRect.height,
-          }
-        : rectFromDrag(drag);
-      if (rect.width < 2 || rect.height < 2) return;
-      this.addAnnotation(
-        rect,
-        clicked ?? undefined,
-        distance < CLICK_THRESHOLD ? "click" : "drag",
-      );
+      const rect = rectFromDrag(drag);
+      if (rect.width < 4 || rect.height < 4) return;
+      this.addAnnotation(rect, "drag");
     });
     document.addEventListener("keydown", this.onKeydown, true);
     window.addEventListener("scroll", this.onScroll, true);
   }
 
   private readonly onScroll = (): void => this.render();
-
-  private elementBelowOverlay(x: number, y: number): Element | undefined {
-    this.host.style.display = "none";
-    const element = document.elementFromPoint(x, y) ?? undefined;
-    this.host.style.display = "";
-    return element;
-  }
 
   private readonly onKeydown = (event: KeyboardEvent): void => {
     if (event.key === "Escape") this.destroy();
@@ -296,11 +267,7 @@ class CaptureOverlay {
       void this.send();
   };
 
-  private addAnnotation(
-    rect: Rect,
-    clicked: Element | undefined,
-    selectionMethod: "click" | "drag",
-  ): void {
+  private addAnnotation(rect: Rect, selectionMethod: "click" | "drag"): void {
     this.annotations.push({
       id: crypto.randomUUID(),
       order: this.annotations.length + 1,
@@ -309,7 +276,7 @@ class CaptureOverlay {
       viewportRect: rect,
       pageRect: { ...rect, x: rect.x + scrollX, y: rect.y + scrollY },
       scroll: { x: scrollX, y: scrollY },
-      targets: candidatesFor(rect, clicked),
+      targets: candidatesFor(rect),
     });
     this.render();
   }
@@ -366,6 +333,19 @@ class CaptureOverlay {
     textarea.placeholder = "What should change?";
     textarea.maxLength = 4_000;
     textarea.value = annotation.comment;
+    textarea.addEventListener("input", () => {
+      annotation.comment = textarea.value;
+      this.renderToolbar();
+    });
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "close";
+    close.textContent = "✕";
+    close.setAttribute("aria-label", "Close comment (text is kept)");
+    close.addEventListener("click", () => {
+      annotation.comment = textarea.value.trim();
+      this.render();
+    });
     const done = document.createElement("button");
     done.type = "button";
     done.textContent = "Done";
@@ -373,7 +353,7 @@ class CaptureOverlay {
       annotation.comment = textarea.value.trim();
       this.render();
     });
-    composer.append(textarea, done);
+    composer.append(close, textarea, done);
     outline.append(composer);
     textarea.focus();
   }
@@ -432,11 +412,13 @@ class CaptureOverlay {
       .layer { position: fixed; inset: 0; pointer-events: auto; cursor: crosshair; background: rgba(15,23,42,.08); }
       .draft, .outline { position: fixed; border: 2px solid #38bdf8; background: rgba(56,189,248,.08); box-shadow: 0 0 0 1px rgba(15,23,42,.25); }
       .draft { pointer-events: none; border-style: dashed; }
-      .marker { position: absolute; right: -14px; top: -14px; width: 28px; height: 28px; border: 2px solid white; border-radius: 50%; color: white; background: #0284c7; font-weight: 800; cursor: pointer; }
-      .composer { position: absolute; right: -2px; top: 34px; width: 300px; padding: 10px; border-radius: 12px; background: #0f172a; box-shadow: 0 16px 40px rgba(2,6,23,.35); cursor: default; }
-      .composer textarea { width: 100%; min-height: 92px; resize: vertical; padding: 9px; border: 1px solid #475569; border-radius: 8px; color: #f8fafc; background: #1e293b; font: 13px/1.45 inherit; }
-      .composer button { float: right; margin-top: 8px; }
+      .marker { position: absolute; right: -14px; top: -14px; width: 28px; height: 28px; padding: 0; border: 2px solid white; border-radius: 50%; color: white; background: #0284c7; font-weight: 800; font: 800 14px/1 inherit; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+      .composer { position: absolute; right: -2px; top: 34px; width: 300px; padding: 34px 10px 10px; border-radius: 12px; background: #0f172a; box-shadow: 0 16px 40px rgba(2,6,23,.35); cursor: default; }
+      .composer .close { position: absolute; top: 6px; right: 8px; padding: 2px 9px; border-radius: 6px; background: #1e293b; color: #fca5a5; font: 700 12px/1 inherit; }
+      .composer .close:hover { color: #fecaca; background: #334155; }
       .toolbar { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; min-width: 330px; padding: 8px 10px 8px 14px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: #f8fafc; background: rgba(15,23,42,.96); box-shadow: 0 14px 36px rgba(2,6,23,.34); pointer-events: auto; cursor: default; }
+      .composer textarea { width: 100%; min-height: 92px; resize: vertical; padding: 9px; border: 1px solid #475569; border-radius: 8px; color: #f8fafc; background: #1e293b; font: 13px/1.45 inherit; }
+      .composer > button:not(.close) { float: right; margin-top: 8px; }
       .toolbar span { flex: 1; font-size: 13px; font-weight: 650; }
       button { padding: 7px 11px; border: 0; border-radius: 999px; color: #e2e8f0; background: #334155; font: 600 12px/1 inherit; cursor: pointer; }
       button.primary { color: #082f49; background: #7dd3fc; }
