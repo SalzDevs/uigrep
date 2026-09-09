@@ -1,10 +1,10 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ['packages/**/*.test.ts', 'apps/**/*.test.ts'],
+    include: ["packages/**/*.test.ts", "apps/**/*.test.ts"],
     coverage: {
-      reporter: ['text', 'html'],
+      reporter: ["text", "html"],
     },
   },
 });

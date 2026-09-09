@@ -4,8 +4,12 @@
   "type": "module",
   "description": "Authenticated loopback protocol helpers for uigrep",
   "license": "MIT",
-  "files": ["dist"],
-  "publishConfig": { "access": "public" },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

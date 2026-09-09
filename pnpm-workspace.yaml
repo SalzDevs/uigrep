@@ -3,5 +3,5 @@ packages:
   - packages/*
 
 onlyBuiltDependencies:
-  - '@tauri-apps/cli'
+  - "@tauri-apps/cli"
   - esbuild

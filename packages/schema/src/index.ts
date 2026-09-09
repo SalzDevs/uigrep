@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { z } from "zod";
 
-export const SCHEMA_VERSION = '1.0.0' as const;
+export const SCHEMA_VERSION = "1.0.0" as const;
 
 export const CONTEXT_BUDGETS = {
   efficient: {
@@ -29,7 +29,7 @@ export const CONTEXT_BUDGETS = {
   },
 } as const;
 
-export const contextModeSchema = z.enum(['efficient', 'balanced', 'deep']);
+export const contextModeSchema = z.enum(["efficient", "balanced", "deep"]);
 export type ContextMode = z.infer<typeof contextModeSchema>;
 
 export const rectSchema = z.object({
@@ -64,8 +64,8 @@ export const targetCandidateSchema = z.object({
 export type TargetCandidate = z.infer<typeof targetCandidateSchema>;
 
 export const screenshotRefSchema = z.object({
-  resourceUri: z.string().startsWith('uigrep://'),
-  mimeType: z.enum(['image/png', 'image/webp', 'image/jpeg']),
+  resourceUri: z.string().startsWith("uigrep://"),
+  mimeType: z.enum(["image/png", "image/webp", "image/jpeg"]),
   byteLength: z.number().int().nonnegative(),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
@@ -74,20 +74,22 @@ export const screenshotRefSchema = z.object({
 export const annotationSchema = z.object({
   id: z.string().uuid(),
   order: z.number().int().positive(),
-  comment: z.string().max(4_000).default(''),
-  selectionMethod: z.enum(['click', 'drag']),
+  comment: z.string().max(4_000).default(""),
+  selectionMethod: z.enum(["click", "drag"]),
   viewportRect: rectSchema,
   pageRect: rectSchema,
   scroll: z.object({ x: z.number().finite(), y: z.number().finite() }),
   screenshot: screenshotRefSchema.optional(),
   targets: z.array(targetCandidateSchema).max(20),
   hasMoreTargets: z.boolean().default(false),
-  status: z.enum(['pending', 'in_progress', 'resolved', 'blocked']).default('pending'),
+  status: z
+    .enum(["pending", "in_progress", "resolved", "blocked"])
+    .default("pending"),
 });
 export type Annotation = z.infer<typeof annotationSchema>;
 
 export const annotationRelationshipSchema = z.object({
-  type: z.enum(['reference', 'match', 'align', 'preserve', 'avoid-changing']),
+  type: z.enum(["reference", "match", "align", "preserve", "avoid-changing"]),
   sourceAnnotationId: z.string().uuid(),
   targetAnnotationId: z.string().uuid(),
   properties: z.array(z.string().max(128)).max(20).default([]),
@@ -97,7 +99,7 @@ export const captureSessionSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   id: z.string().uuid(),
   capturedAt: z.string().datetime(),
-  status: z.enum(['draft', 'pending', 'in_progress', 'resolved', 'blocked']),
+  status: z.enum(["draft", "pending", "in_progress", "resolved", "blocked"]),
   page: z.object({
     url: z.string().url().max(8_192),
     title: z.string().max(1_000),
@@ -107,7 +109,7 @@ export const captureSessionSchema = z.object({
       devicePixelRatio: z.number().positive().max(10),
     }),
     scroll: z.object({ x: z.number().finite(), y: z.number().finite() }),
-    colorScheme: z.enum(['light', 'dark', 'no-preference']),
+    colorScheme: z.enum(["light", "dark", "no-preference"]),
   }),
   annotations: z.array(annotationSchema).min(1).max(50),
   relationships: z.array(annotationRelationshipSchema).max(100).default([]),
@@ -115,29 +117,45 @@ export const captureSessionSchema = z.object({
 export type CaptureSession = z.infer<typeof captureSessionSchema>;
 
 export const captureManifestSchema = captureSessionSchema
-  .pick({ schemaVersion: true, id: true, capturedAt: true, status: true, page: true })
+  .pick({
+    schemaVersion: true,
+    id: true,
+    capturedAt: true,
+    status: true,
+    page: true,
+  })
   .extend({
     annotations: z.array(
-      annotationSchema.pick({ id: true, order: true, comment: true, status: true }).extend({
-        targetSummary: z.string().max(500),
-      }),
+      annotationSchema
+        .pick({ id: true, order: true, comment: true, status: true })
+        .extend({
+          targetSummary: z.string().max(500),
+        }),
     ),
     relationshipCount: z.number().int().nonnegative(),
   });
 export type CaptureManifest = z.infer<typeof captureManifestSchema>;
 
-export const daemonEventSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('start_capture') }),
-  z.object({ type: z.literal('cancel_capture') }),
-  z.object({ type: z.literal('state_changed'), state: z.enum(['ready', 'selecting', 'sending', 'sent', 'error', 'paused']), annotationCount: z.number().int().nonnegative().optional() }),
-  z.object({ type: z.literal('capture_stored'), sessionId: z.string().uuid() }),
+export const daemonEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("start_capture") }),
+  z.object({ type: z.literal("cancel_capture") }),
+  z.object({
+    type: z.literal("state_changed"),
+    state: z.enum(["ready", "selecting", "sending", "sent", "error", "paused"]),
+    annotationCount: z.number().int().nonnegative().optional(),
+  }),
+  z.object({ type: z.literal("capture_stored"), sessionId: z.string().uuid() }),
 ]);
 export type DaemonEvent = z.infer<typeof daemonEventSchema>;
 
 export function summarizeTarget(target: TargetCandidate | undefined): string {
-  if (!target) return 'Visual region';
-  const identity = target.selectors.testId ?? target.selectors.accessibleName ?? target.text;
-  return [target.tag, identity.trim()].filter(Boolean).join(' · ').slice(0, 500);
+  if (!target) return "Visual region";
+  const identity =
+    target.selectors.testId ?? target.selectors.accessibleName ?? target.text;
+  return [target.tag, identity.trim()]
+    .filter(Boolean)
+    .join(" · ")
+    .slice(0, 500);
 }
 
 export function toCaptureManifest(session: CaptureSession): CaptureManifest {

@@ -6,6 +6,6 @@
     "exactOptionalPropertyTypes": true,
     "useUnknownInCatchVariables": true
   },
-  "include": ["entrypoints/**/*.ts", "lib/**/*.ts", "wxt.config.ts"]
-  ,"files": [".wxt/wxt.d.ts"]
+  "include": ["entrypoints/**/*.ts", "lib/**/*.ts", "wxt.config.ts"],
+  "files": [".wxt/wxt.d.ts"]
 }

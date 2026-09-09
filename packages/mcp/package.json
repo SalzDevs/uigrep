@@ -4,8 +4,12 @@
   "type": "module",
   "description": "MCP stdio adapter for uigrep — retrieve UI capture context in coding agents",
   "license": "MIT",
-  "files": ["dist"],
-  "publishConfig": { "access": "public" },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "uigrep-mcp": "./dist/index.js"
   },
