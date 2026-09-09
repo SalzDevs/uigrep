@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="manifest.open_in_tab" content="true" />
+    <title>Pair uigrep</title>
+    <style>
+      body { max-width: 560px; margin: 64px auto; padding: 24px; font: 15px/1.5 system-ui; color: #0f172a; }
+      label, input, button { display: block; width: 100%; }
+      input { margin: 8px 0 16px; padding: 10px 12px; box-sizing: border-box; }
+      button { padding: 10px; border: 0; border-radius: 8px; color: white; background: #0f172a; cursor: pointer; }
+      p { color: #475569; }
+    </style>
+  </head>
+  <body>
+    <h1>Pair the browser companion</h1>
+    <p>This one-time development screen will be replaced by installer-managed pairing.</p>
+    <form id="pairing-form">
+      <label for="token">Local pairing token</label>
+      <input id="token" name="token" autocomplete="off" required />
+      <button type="submit">Save pairing</button>
+    </form>
+    <p id="status" role="status"></p>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
