@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1a1d29"/>
+      <stop offset="1" stop-color="#2b3050"/>
+    </linearGradient>
+    <linearGradient id="stroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <!-- crosshair: region selection -->
+  <g stroke="url(#stroke)" stroke-width="40" stroke-linecap="round" fill="none">
+    <path d="M 292 392 V 292 H 392"/>
+    <path d="M 632 292 H 732 V 392"/>
+    <path d="M 732 632 V 732 H 632"/>
+    <path d="M 392 732 H 292 V 632"/>
+  </g>
+  <!-- magnifier: grep -->
+  <g stroke="#f8fafc" stroke-width="44" fill="none" stroke-linecap="round">
+    <circle cx="474" cy="474" r="130"/>
+    <path d="M 572 572 L 682 682"/>
+  </g>
+  <circle cx="474" cy="474" r="52" fill="#7dd3fc"/>
+</svg>
