@@ -1,0 +1,26 @@
+[package]
+name = "uigrep-desktop"
+version = "0.1.0"
+description = "Local-first visual context bridge for coding agents"
+edition = "2021"
+
+[lib]
+name = "uigrep_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+axum = { version = "0.8", features = ["ws"] }
+http = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+tokio = { version = "1", features = ["net", "rt-multi-thread", "sync"] }
+tower-http = { version = "0.6", features = ["cors", "limit"] }
+uuid = { version = "1", features = ["v4"] }
