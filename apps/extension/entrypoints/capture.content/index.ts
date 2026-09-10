@@ -6,6 +6,7 @@ import {
   type TargetCandidate,
 } from "@uigrep/schema";
 import type { BackgroundRequest, ContentRequest } from "../../lib/messages";
+import { normalizeWireCapture, truncateUtf8 } from "../../lib/wire";
 
 const OVERLAY_ID = "uigrep-overlay-host";
 const MAX_SCANNED_ELEMENTS = 5_000;
@@ -50,10 +51,10 @@ function intersects(a: Rect, b: DOMRect): boolean {
 }
 
 function clippedText(element: Element): string {
-  return (element.textContent ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 2_000);
+  return truncateUtf8(
+    (element.textContent ?? "").replace(/\s+/g, " ").trim(),
+    2_000,
+  );
 }
 
 function selectorFor(element: Element): string {
@@ -132,30 +133,38 @@ function targetFor(
           name.startsWith("data-"),
       )
       .slice(0, 20)
-      .map(({ name, value }) => [name, value.slice(0, 2_000)]),
+      .filter(({ name }) => new TextEncoder().encode(name).length <= 256)
+      .map(({ name, value }) => [name, truncateUtf8(value, 2_000)]),
   );
   const styleFacts: Record<string, string> = Object.fromEntries(
     STYLE_PROPERTIES.map(
-      (property) => [property, computed.getPropertyValue(property)] as const,
+      (property) =>
+        [
+          property,
+          truncateUtf8(computed.getPropertyValue(property), 1024),
+        ] as const,
     ).filter(([, value]) => value.length > 0),
   );
+  const boundedSelector = (
+    value: string | undefined,
+    max: number,
+  ): string | undefined =>
+    value && new TextEncoder().encode(value).length <= max ? value : undefined;
   return {
     id: crypto.randomUUID(),
     rank,
-    tag: element.tagName.toLowerCase(),
+    tag: truncateUtf8(element.tagName.toLowerCase(), 64),
     text: clippedText(element),
     rect: { x: box.x, y: box.y, width: box.width, height: box.height },
     selectors: {
-      ...(html.dataset.testid ? { testId: html.dataset.testid } : {}),
-      ...(element.id ? { id: element.id } : {}),
-      css: selectorFor(element),
-      ...(role ? { role } : {}),
-      ...(accessibleName(element)
-        ? { accessibleName: accessibleName(element) }
-        : {}),
+      testId: boundedSelector(html.dataset.testid, 256),
+      id: boundedSelector(element.id, 256),
+      css: boundedSelector(selectorFor(element), 2048),
+      role: boundedSelector(role, 128),
+      accessibleName: boundedSelector(accessibleName(element), 512),
     },
     attributes,
-    domSnippet: element.outerHTML.slice(0, 12_288),
+    domSnippet: truncateUtf8(element.outerHTML, 12_288),
     styleFacts,
     score: Math.min(
       1,
@@ -202,6 +211,10 @@ class CaptureOverlay {
   private readonly toolbar: HTMLDivElement;
   private annotations: DraftAnnotation[] = [];
   private drag: Drag | undefined;
+  private sending = false;
+  public get isActive(): boolean {
+    return this.host.isConnected;
+  }
 
   public constructor() {
     this.host = document.createElement("div");
@@ -219,6 +232,7 @@ class CaptureOverlay {
   }
 
   public destroy(): void {
+    this.drag = undefined;
     if (this.resizeTimer) window.clearTimeout(this.resizeTimer);
     document.removeEventListener("keydown", this.onKeydown, true);
     window.removeEventListener("scroll", this.onScroll, true);
@@ -228,6 +242,14 @@ class CaptureOverlay {
 
   private bind(): void {
     this.layer.addEventListener("pointerdown", (event) => {
+      if (
+        event.button !== 0 ||
+        !event.isPrimary ||
+        this.sending ||
+        this.drag ||
+        this.annotations.length >= 50
+      )
+        return;
       if ((event.target as HTMLElement).closest(".annotation-ui")) return;
       event.preventDefault();
       event.stopPropagation();
@@ -247,12 +269,32 @@ class CaptureOverlay {
     });
     this.layer.addEventListener("pointerup", (event) => {
       if (!this.drag) return;
-      const drag = this.drag;
+      const drag = {
+        ...this.drag,
+        currentX: event.clientX,
+        currentY: event.clientY,
+      };
       this.drag = undefined;
+      if (this.layer.hasPointerCapture(event.pointerId))
+        this.layer.releasePointerCapture(event.pointerId);
+      this.shadow.querySelector(".draft")?.remove();
       const rect = rectFromDrag(drag);
       if (rect.width < 4 || rect.height < 4) return;
-      this.addAnnotation(rect, "drag");
+      try {
+        this.addAnnotation(rect, "drag");
+      } catch (error) {
+        this.toolbar.dataset.error =
+          error instanceof Error
+            ? error.message
+            : "Cannot inspect this region. Try another.";
+      }
     });
+    const cancelDrag = () => {
+      this.drag = undefined;
+      this.shadow.querySelector(".draft")?.remove();
+    };
+    this.layer.addEventListener("pointercancel", cancelDrag);
+    this.layer.addEventListener("lostpointercapture", cancelDrag);
     document.addEventListener("keydown", this.onKeydown, true);
     window.addEventListener("scroll", this.onScroll, true);
     window.addEventListener("resize", this.onResize);
@@ -271,8 +313,10 @@ class CaptureOverlay {
   private reanchorAnnotations(): void {
     for (const annotation of this.annotations) {
       let best: { rect: Rect; distance: number } | undefined;
-      const centerX = annotation.viewportRect.x + annotation.viewportRect.width / 2;
-      const centerY = annotation.viewportRect.y + annotation.viewportRect.height / 2;
+      const centerX =
+        annotation.viewportRect.x + annotation.viewportRect.width / 2;
+      const centerY =
+        annotation.viewportRect.y + annotation.viewportRect.height / 2;
       for (const target of annotation.targets) {
         let element: Element | null = null;
         try {
@@ -295,7 +339,10 @@ class CaptureOverlay {
           box.y + box.height / 2 - centerY,
         );
         if (!best || distance < best.distance)
-          best = { rect: { x: box.x, y: box.y, width: box.width, height: box.height }, distance };
+          best = {
+            rect: { x: box.x, y: box.y, width: box.width, height: box.height },
+            distance,
+          };
       }
       if (best && best.distance < 400) {
         annotation.viewportRect = best.rect;
@@ -320,6 +367,7 @@ class CaptureOverlay {
   };
 
   private addAnnotation(rect: Rect, selectionMethod: "click" | "drag"): void {
+    if (this.sending || this.annotations.length >= 50) return;
     this.annotations.push({
       id: crypto.randomUUID(),
       order: this.annotations.length + 1,
@@ -386,7 +434,7 @@ class CaptureOverlay {
     textarea.maxLength = 4_000;
     textarea.value = annotation.comment;
     textarea.addEventListener("input", () => {
-      annotation.comment = textarea.value;
+      annotation.comment = truncateUtf8(textarea.value, 4000);
       this.renderToolbar();
     });
     const close = document.createElement("button");
@@ -395,14 +443,14 @@ class CaptureOverlay {
     close.textContent = "✕";
     close.setAttribute("aria-label", "Close comment (text is kept)");
     close.addEventListener("click", () => {
-      annotation.comment = textarea.value.trim();
+      annotation.comment = truncateUtf8(textarea.value.trim(), 4000);
       this.render();
     });
     const done = document.createElement("button");
     done.type = "button";
     done.textContent = "Done";
     done.addEventListener("click", () => {
-      annotation.comment = textarea.value.trim();
+      annotation.comment = truncateUtf8(textarea.value.trim(), 4000);
       this.render();
     });
     composer.append(close, textarea, done);
@@ -421,40 +469,61 @@ class CaptureOverlay {
     const send = document.createElement("button");
     send.type = "button";
     send.className = "primary";
-    send.textContent = "Send to agent";
-    send.disabled = this.annotations.length === 0;
+    send.textContent = this.sending ? "Sending…" : "Send to agent";
+    send.disabled = this.sending || this.annotations.length === 0;
     send.addEventListener("click", () => void this.send());
     this.toolbar.append(count, cancel, send);
   }
 
   private async send(): Promise<void> {
-    const capture = captureSessionSchema.parse({
-      schemaVersion: SCHEMA_VERSION,
-      id: crypto.randomUUID(),
-      capturedAt: new Date().toISOString(),
-      status: "pending",
-      page: {
-        url: location.href,
-        title: document.title,
-        viewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
-        scroll: { x: scrollX, y: scrollY },
-        colorScheme: matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light",
-      },
-      annotations: this.annotations,
-      relationships: [],
-    });
-    const response: { ok: boolean; error?: string } =
-      await browser.runtime.sendMessage({
-        type: "send-capture",
-        capture,
-      } satisfies BackgroundRequest);
-    if (!response.ok) {
-      this.toolbar.dataset.error = response.error ?? "Unable to send capture.";
-      return;
+    if (this.sending || !this.isActive || !this.annotations.length) return;
+    this.sending = true;
+    delete this.toolbar.dataset.error;
+    this.renderToolbar();
+    try {
+      const parsed = captureSessionSchema.safeParse({
+        schemaVersion: SCHEMA_VERSION,
+        id: crypto.randomUUID(),
+        capturedAt: new Date().toISOString(),
+        status: "pending",
+        page: {
+          url: location.href,
+          title: truncateUtf8(document.title, 1000),
+          viewport: {
+            width: innerWidth,
+            height: innerHeight,
+            devicePixelRatio,
+          },
+          scroll: { x: scrollX, y: scrollY },
+          colorScheme: matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light",
+        },
+        annotations: this.annotations,
+        relationships: [],
+      });
+      if (!parsed.success)
+        throw new Error(
+          "This selection exceeds capture limits. Select fewer or smaller regions and retry.",
+        );
+      const capture = normalizeWireCapture(parsed.data);
+      const response: { ok: boolean; error?: string } =
+        await browser.runtime.sendMessage({
+          type: "send-capture",
+          capture,
+        } satisfies BackgroundRequest);
+      if (!response?.ok)
+        throw new Error(response?.error ?? "Unable to send capture.");
+      this.destroy();
+    } catch (error) {
+      this.toolbar.dataset.error =
+        error instanceof Error
+          ? error.message
+          : "Unable to send capture. Open companion options and retry.";
+    } finally {
+      this.sending = false;
+      if (this.isActive) this.renderToolbar();
     }
-    this.destroy();
   }
 
   private styles(): string {
@@ -486,10 +555,22 @@ export default defineContentScript({
   matches: ["<all_urls>"],
   runAt: "document_idle",
   main() {
-    browser.runtime.onMessage.addListener((message: ContentRequest) => {
+    browser.runtime.onMessage.addListener((message: ContentRequest, sender) => {
+      if (
+        sender.id !== browser.runtime.id ||
+        sender.tab ||
+        !message ||
+        typeof message !== "object"
+      )
+        return;
       if (message.type === "start-capture") {
-        activeOverlay?.destroy();
-        activeOverlay = new CaptureOverlay();
+        if (activeOverlay?.isActive) return;
+        try {
+          activeOverlay = new CaptureOverlay();
+        } catch {
+          activeOverlay?.destroy();
+          activeOverlay = undefined;
+        }
       }
       if (message.type === "cancel-capture") {
         activeOverlay?.destroy();

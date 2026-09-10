@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isRegistered, register } from "@tauri-apps/plugin-global-shortcut";
+import { Setup } from "./Setup";
 import "./styles.css";
 
 type PillState =
@@ -21,7 +22,7 @@ const labels: Record<Exclude<PillState["kind"], "annotated">, string> = {
   ready: "uigrep ready",
   selecting: "Select UI",
   sending: "Sending…",
-  sent: "Sent to agent",
+  sent: "Capture saved",
   error: "Needs attention",
   paused: "uigrep paused",
 };
@@ -31,17 +32,33 @@ function Pill(): React.JSX.Element {
 
   React.useEffect(() => {
     const shortcut = "Alt+Shift+G";
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
     const initialize = async (): Promise<void> => {
-      const unlisten = await listen<PillState>("pill-state", (event) =>
-        setState(event.payload),
-      );
-      if (!(await isRegistered(shortcut))) {
-        await register(shortcut, () => void invoke("start_capture"));
+      unlisten = await listen<PillState>("pill-state", (event) => {
+        if (!disposed) setState(event.payload);
+      });
+      if (disposed) {
+        unlisten();
+        return;
       }
-      setState({ kind: "ready" });
-      return void unlisten;
+      if (!(await isRegistered(shortcut))) {
+        await register(shortcut, (event) => {
+          if (event.state === "Pressed")
+            void invoke("start_capture").catch(() =>
+              setState({ kind: "error" }),
+            );
+        });
+      }
+      const status = await invoke<{ daemonReady: boolean }>("setup_status");
+      if (!disposed)
+        setState({ kind: status.daemonReady ? "ready" : "starting" });
     };
     void initialize().catch(() => setState({ kind: "error" }));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
 
   const label =
@@ -54,7 +71,16 @@ function Pill(): React.JSX.Element {
       className={`pill pill--${state.kind}`}
       type="button"
       aria-label={`${label}. Drag to reposition.`}
-      onMouseDown={() => void getCurrentWindow().startDragging()}
+      onMouseDown={(event) => {
+        if (event.button === 0)
+          void getCurrentWindow()
+            .startDragging()
+            .catch(() => undefined);
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        void invoke("reopen_setup").catch(() => setState({ kind: "error" }));
+      }}
     >
       <span className="pill__dot" aria-hidden="true" />
       <span className="pill__label">{label}</span>
@@ -62,8 +88,8 @@ function Pill(): React.JSX.Element {
   );
 }
 
+const isSetup = new URLSearchParams(location.search).get("view") === "setup";
+document.documentElement.dataset.view = isSetup ? "setup" : "pill";
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <Pill />
-  </React.StrictMode>,
+  isSetup ? <Setup /> : <Pill />,
 );

@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { loadToken } from "./token.js";
 import { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { UigrepDaemonClient } from "@uigrep/bridge";
@@ -11,36 +9,6 @@ import {
   toCaptureManifest,
 } from "@uigrep/schema";
 import { z } from "zod";
-
-function tokenPath(): string {
-  if (process.platform === "win32") {
-    return join(
-      process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"),
-      "uigrep",
-      "token",
-    );
-  }
-  if (process.platform === "darwin") {
-    return join(homedir(), "Library", "Application Support", "uigrep", "token");
-  }
-  return join(
-    process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"),
-    "uigrep",
-    "token",
-  );
-}
-
-async function loadToken(): Promise<string> {
-  const fromEnvironment = process.env.UIGREP_TOKEN?.trim();
-  if (fromEnvironment) return fromEnvironment;
-  try {
-    return (await readFile(tokenPath(), "utf8")).trim();
-  } catch {
-    throw new Error(
-      "uigrep is not running or has not created its local pairing token.",
-    );
-  }
-}
 
 function asText(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -78,6 +46,7 @@ async function main(): Promise<void> {
     },
     async ({ sessionId }) => {
       const manifest = toCaptureManifest(await client.getCapture(sessionId));
+      await client.verifySetup(sessionId);
       return {
         content: [{ type: "text", text: asText(manifest) }],
         structuredContent: manifest,
@@ -146,6 +115,7 @@ async function main(): Promise<void> {
           annotation.targets.length > budget.rankedTargets ||
           annotation.hasMoreTargets,
       };
+      await client.verifySetup(sessionId);
       return {
         content: [{ type: "text", text: asText(context) }],
         structuredContent: context,

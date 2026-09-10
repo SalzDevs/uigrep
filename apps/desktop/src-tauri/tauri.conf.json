@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "identifier": "dev.uigrep.app",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm desktop:dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm desktop:build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -25,6 +25,18 @@
         "skipTaskbar": true,
         "shadow": false,
         "center": true
+      },
+      {
+        "label": "setup",
+        "title": "Set up uigrep",
+        "url": "index.html?view=setup",
+        "width": 940,
+        "height": 760,
+        "minWidth": 600,
+        "minHeight": 520,
+        "visible": false,
+        "center": true,
+        "backgroundColor": "#0c111b"
       }
     ],
     "security": {
@@ -32,6 +44,7 @@
     }
   },
   "bundle": {
+    "resources": { "runtime/": "runtime/" },
     "active": true,
     "targets": "all",
     "icon": [

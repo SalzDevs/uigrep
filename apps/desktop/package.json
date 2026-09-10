@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
+    "prepare:runtime": "node ../../scripts/prepare-runtime.mjs",
+    "desktop:dev": "pnpm prepare:runtime && pnpm dev",
+    "desktop:build": "pnpm prepare:runtime && pnpm build",
     "tauri": "tauri"
   },
   "dependencies": {
