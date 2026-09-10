@@ -4,14 +4,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   canFinish,
   setupStep,
-  testPrompt,
   type AgentOption,
   type ConfigResult,
   type SetupStatus,
 } from "./setup-state";
 import "./setup.css";
 
-const steps = ["Connect browser", "Choose agent", "Test capture", "Ready"];
+const steps = ["Browser", "Agent", "Test", "Ready"];
 
 export function Setup() {
   const [status, setStatus] = useState<SetupStatus>();
@@ -87,7 +86,6 @@ export function Setup() {
   const current = status ? setupStep(status) : 0;
   const step = Math.min(visitedStep ?? current, current);
   const selected = agents.find((a) => a.id === agentId);
-  const prompt = status?.testCaptureId ? testPrompt(status.testCaptureId) : "";
   const changeStep = (index: number) => {
     setVisitedStep(index);
     setError("");
@@ -103,7 +101,6 @@ export function Setup() {
           </span>{" "}
           uigrep
         </div>
-        <p className="setup-eyebrow">FROM PIXELS TO CONTEXT</p>
         <nav aria-label="Installation progress">
           <ol>
             {steps.map((label, index) => (
@@ -125,14 +122,7 @@ export function Setup() {
             ))}
           </ol>
         </nav>
-        <div className="local-note">
-          <span aria-hidden="true">◈</span>
-          <strong>Local by design.</strong>
-          <p>
-            No uigrep account. No cloud upload. Your agent controls what it
-            retrieves.
-          </p>
-        </div>
+        <p className="local-note">Local only. No account. No cloud.</p>
       </aside>
       <main className="setup-main">
         <header className="setup-topbar">
@@ -142,9 +132,11 @@ export function Setup() {
             <i />
             {status?.daemonReady && !connectionError
               ? "Desktop running"
-              : "Connecting to desktop…"}
+              : "Connecting…"}
           </span>
-          <span>Setup · {step + 1} / 4</span>
+          <span>
+            {step + 1} / {steps.length}
+          </span>
         </header>
         <div className="setup-content">
           {(error || connectionError || status?.error) && (
@@ -153,79 +145,35 @@ export function Setup() {
             </div>
           )}
           {!status ? (
-            <>
-              <h1>Getting your workspace ready.</h1>
-              <p>
-                Checking the local daemon. If this takes a while, reopen Setup
-                from the tray menu.
-              </p>
-            </>
+            <h1>Connecting…</h1>
           ) : (
             <>
               {step === 0 && (
                 <>
-                  <p className="setup-eyebrow">ONE BROWSER APPROVAL</p>
-                  <h1>
-                    Your browser.
-                    <br />
-                    Now agent-aware.
-                  </h1>
-                  <p className="setup-lead">
-                    Add the Chrome companion to select UI and attach precise
-                    context. Keep this window open—we will detect it
-                    automatically.
-                  </p>
+                  <h1>Connect your browser</h1>
                   <div className="setup-card">
-                    <div className="card-heading">
-                      <span className="app-glyph">C</span>
-                      <div>
-                        <h2>Chrome companion</h2>
-                        <p>The first supported browser for guided setup.</p>
-                      </div>
-                    </div>
                     <p>
-                      Chrome will ask you to approve the extension. Then approve
-                      its connection here. No passwords, tokens or terminal
-                      commands.
+                      Install the Chrome companion, then click Connect in its
+                      options.
                     </p>
                     <button
                       className="primary"
                       disabled={busy || !status.daemonReady || !status.storeUrl}
-                      onClick={() => {
-                        void command("begin_browser_setup");
-                      }}
+                      onClick={() => void command("begin_browser_setup")}
                     >
                       Open Chrome Web Store ↗
                     </button>
-                    {!status.storeUrl && (
-                      <p className="setup-warning">
-                        This build has no published Chrome listing configured.
-                        Store installation is not available yet.
-                      </p>
-                    )}
                     {status.developmentMode && (
-                      <details>
-                        <summary>
-                          Development build: test before store publication
-                        </summary>
-                        <p>
-                          Load the built companion as an unpacked Chrome
-                          extension. It requests approval automatically on
-                          installation. For an existing installation, open
-                          companion options and select Connect. Debug builds
-                          accept unpacked Chrome extension IDs.
-                        </p>
-                      </details>
+                      <p className="setup-warning">
+                        Dev build: load the unpacked companion
+                        (<code>apps/extension/.output/chrome-mv3</code>), it
+                        requests pairing automatically.
+                      </p>
                     )}
                   </div>
                   {status.pendingPairings.map((request) => (
                     <div className="setup-card pairing-card" key={request.id}>
                       <h2>Approve {request.name}?</h2>
-                      <p>
-                        Only approve if you just installed or connected this
-                        companion. Approval expires after five minutes.
-                      </p>
-                      <code className="wrap-code">{request.origin}</code>
                       <div className="button-row">
                         <button
                           className="primary"
@@ -237,7 +185,7 @@ export function Setup() {
                             setVisitedStep(undefined);
                           }}
                         >
-                          Approve browser
+                          Approve
                         </button>
                         <button
                           className="secondary"
@@ -255,7 +203,7 @@ export function Setup() {
                   ))}
                   {status.pairedBrowsers.map((browser) => (
                     <div className="paired-row" key={browser.id}>
-                      <span>✓ {browser.name} approved</span>
+                      <span>✓ {browser.name}</span>
                       {revokeId === browser.id ? (
                         <div className="button-row">
                           <button
@@ -268,7 +216,7 @@ export function Setup() {
                               setRevokeId(undefined);
                             }}
                           >
-                            Confirm revoke
+                            Revoke
                           </button>
                           <button
                             className="quiet"
@@ -300,14 +248,8 @@ export function Setup() {
               )}
               {step === 1 && (
                 <>
-                  <p className="setup-eyebrow">KEEP THE TOOLS YOU LOVE</p>
-                  <h1>Choose your coding agent.</h1>
-                  <p className="setup-lead">
-                    We will add the local uigrep MCP server to your client. Its
-                    existing servers stay intact, and the runtime is included.
-                  </p>
+                  <h1>Configure your agent</h1>
                   <fieldset className="agent-options" disabled={busy}>
-                    <legend className="sr-only">Coding client</legend>
                     {agents.map((agent) => (
                       <label
                         className={`agent-option ${agent.id === agentId ? "selected" : ""}`}
@@ -329,26 +271,18 @@ export function Setup() {
                               ? "VS Code · GitHub Copilot"
                               : "Cursor"}
                           </strong>
-                          <small>
-                            {agent.available
-                              ? "Configuration directory found"
-                              : "Not detected; configure only if you use this client"}
-                          </small>
+                          {!agent.available && (
+                            <small>Not detected on this device</small>
+                          )}
                         </span>
                       </label>
                     ))}
                   </fieldset>
                   {selected && (
-                    <div className="setup-card">
-                      <h2>One safe configuration change</h2>
-                      <p>With your approval, add only the uigrep server to:</p>
-                      <code className="wrap-code">{selected.configPath}</code>
-                      <p>
-                        Existing files are backed up. Conflicting uigrep entries
-                        and unsupported configuration formats are never silently
-                        overwritten.
-                      </p>
-                    </div>
+                    <p className="config-path">
+                      Adds one server to <code>{selected.configPath}</code>.
+                      Backup is kept.
+                    </p>
                   )}
                   <div className="button-row">
                     <button
@@ -366,7 +300,7 @@ export function Setup() {
                         });
                       }}
                     >
-                      {busy ? "Connecting…" : "Approve & connect agent →"}
+                      {busy ? "Connecting…" : "Connect agent →"}
                     </button>
                     {status.agentConfigured && (
                       <button
@@ -374,17 +308,12 @@ export function Setup() {
                         disabled={busy}
                         onClick={() => setVisitedStep(undefined)}
                       >
-                        Continue to test
+                        Continue →
                       </button>
                     )}
                   </div>
                   <details>
-                    <summary>Restore a previous configuration</summary>
-                    <p>
-                      Restores the selected client's exact pre-setup contents
-                      only if it has not changed since setup. You will need to
-                      reconnect an agent and repeat verification.
-                    </p>
+                    <summary>Restore previous configuration…</summary>
                     {confirmRestore ? (
                       <div className="button-row">
                         <button
@@ -401,7 +330,7 @@ export function Setup() {
                             });
                           }}
                         >
-                          Confirm restore
+                          Confirm
                         </button>
                         <button
                           className="quiet"
@@ -416,7 +345,7 @@ export function Setup() {
                         disabled={busy || !selected}
                         onClick={() => setConfirmRestore(true)}
                       >
-                        Restore selected client…
+                        Restore
                       </button>
                     )}
                   </details>
@@ -424,97 +353,53 @@ export function Setup() {
               )}
               {step === 2 && (
                 <>
-                  <p className="setup-eyebrow">PROVE THE WHOLE CONNECTION</p>
-                  <h1>One capture. Real context.</h1>
-                  <p className="setup-lead">
-                    We only mark setup ready after a browser capture reaches the
-                    daemon and the MCP adapter retrieves it.
-                  </p>
+                  <h1>Test the connection</h1>
                   {result && (
                     <div className="setup-success" role="status">
-                      ✓ Agent configuration saved. {result.message}
+                      ✓ Agent configured
                     </div>
                   )}
                   <div className="setup-card">
-                    <h2>1. Capture the practice card</h2>
-                    <p>
-                      Open the test page in your approved Chrome profile. Press{" "}
-                      <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd>, drag
-                      around the card, add a comment, and select{" "}
-                      <strong>Send to agent</strong>.
-                    </p>
-                    <p>
-                      On macOS use Option + Shift + G. The page opens in your
-                      default browser; use the paired Chrome profile.
-                    </p>
-                    <button
-                      className="secondary"
-                      disabled={busy || !status.daemonReady}
-                      onClick={() => {
-                        void command("open_test_capture");
-                        setCopied(false);
-                      }}
-                    >
-                      {status.testCaptureId
-                        ? "Start a fresh test"
-                        : "Open test page ↗"}
-                    </button>
+                    <ol className="test-steps">
+                      <li>
+                        <button
+                          className="secondary"
+                          disabled={busy || !status.daemonReady}
+                          onClick={() => {
+                            void command("open_test_capture");
+                            setCopied(false);
+                          }}
+                        >
+                          {status.testCaptureId
+                            ? "Open test page again ↗"
+                            : "Open test page ↗"}
+                        </button>
+                      </li>
+                      <li>
+                        On the test page: <kbd>Alt</kbd> + <kbd>Shift</kbd> +{" "}
+                        <kbd>G</kbd>, drag a region, comment, send.
+                      </li>
+                      <li>
+                        Ask your agent: <code>Read my uigrep capture.</code>
+                      </li>
+                    </ol>
                   </div>
                   <div className="check-row" role="status">
                     <span>{status.testCaptureId ? "✓" : "○"}</span>
                     {status.testCaptureId
-                      ? "Browser capture received"
-                      : "Waiting for your browser capture"}
+                      ? "Capture received"
+                      : "Waiting for capture"}
                   </div>
-                  {status.testCaptureId && (
-                    <div className="setup-card">
-                      <h2>2. Let your agent read it</h2>
-                      <p>
-                        Reload your coding client if needed, enable the uigrep
-                        MCP server, and approve any client trust prompt. Send
-                        this in agent chat:
-                      </p>
-                      <textarea
-                        className="test-prompt"
-                        aria-label="Test prompt to send to your agent"
-                        readOnly
-                        value={prompt}
-                        onFocus={(event) => event.target.select()}
-                      />
-                      <button
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() => {
-                          void act(async () => {
-                            await navigator.clipboard.writeText(prompt);
-                            setCopied(true);
-                          });
-                        }}
-                      >
-                        {copied ? "Copied ✓" : "Copy test prompt"}
-                      </button>
-                      <p>
-                        This asks the agent to read the capture, not change your
-                        project. Client trust approvals cannot be bypassed by
-                        the installer.
-                      </p>
-                    </div>
-                  )}
                   <div className="check-row" role="status">
                     <span>{status.mcpVerified ? "✓" : "○"}</span>
-                    {status.mcpVerified
-                      ? "MCP retrieval confirmed"
-                      : "Waiting for the MCP read receipt"}
+                    {status.mcpVerified ? "Agent read it" : "Waiting for agent"}
                   </div>
                   <details>
-                    <summary>Something not connecting?</summary>
+                    <summary>Not connecting?</summary>
                     <p>
-                      Keep uigrep running. Check you are using the approved
-                      browser profile and the configured editor. Reload the
-                      editor and approve its MCP server. If the shortcut is
-                      taken, change the companion command in Chrome's extension
-                      shortcuts. Setup never requires disabling browser
-                      security.
+                      Keep uigrep running. Use the approved Chrome profile.
+                      Reload the editor if the MCP server is missing. Shortcut
+                      taken? Change it in Chrome's extension shortcuts.
                     </p>
                   </details>
                   {canFinish(status) && (
@@ -529,56 +414,30 @@ export function Setup() {
               )}
               {step === 3 && (
                 <>
-                  <div className="ready-mark" aria-hidden="true">
-                    ✓
-                  </div>
-                  <p className="setup-eyebrow">CONNECTED END TO END</p>
-                  <h1>Point. Explain. Build.</h1>
-                  <p className="setup-lead">
-                    Your browser is approved, your agent is configured, and the
-                    test capture has been retrieved through MCP.
-                  </p>
-                  <div className="setup-card ready-card">
-                    <h2>Your everyday workflow</h2>
-                    <ol>
-                      <li>Open the UI you want to change.</li>
-                      <li>
-                        Press <strong>Alt + Shift + G</strong> and drag a
-                        region.
-                      </li>
-                      <li>Add a comment and send the capture.</li>
-                      <li>
-                        Ask your coding agent to read the uigrep feedback.
-                      </li>
-                    </ol>
-                  </div>
-                  <p>
-                    “Sent” means saved locally for retrieval—not that an agent
-                    has started a fix. Your coding client controls its model,
-                    permissions and data handling.
-                  </p>
+                  <h1>Ready</h1>
+                  <ol className="test-steps">
+                    <li>
+                      Open any page, press <kbd>Alt</kbd> + <kbd>Shift</kbd> +{" "}
+                      <kbd>G</kbd>, drag a region.
+                    </li>
+                    <li>Comment and send.</li>
+                    <li>Ask your agent to read the uigrep capture.</li>
+                  </ol>
                   <button
                     className="primary"
                     disabled={
                       busy || !canFinish(status) || Boolean(connectionError)
                     }
-                    onClick={() => {
-                      void command("finish_setup");
-                    }}
+                    onClick={() => void command("finish_setup")}
                   >
-                    Finish setup →
+                    Finish →
                   </button>
-                  <p className="fine-print">
-                    The small status pill stays available. Reopen this window
-                    from the uigrep tray menu at any time.
-                  </p>
                 </>
               )}
             </>
           )}
         </div>
         <footer className="setup-footer">
-          <span>Your progress is saved on this device.</span>
           <button
             className="quiet"
             disabled={busy}

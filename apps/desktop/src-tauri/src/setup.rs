@@ -521,6 +521,9 @@ pub(crate) fn finish_setup(
     if let Some(window) = state.inner.app.get_webview_window("setup") {
         window.hide().map_err(|e| e.to_string())?;
     }
+    if let Some(pill) = state.inner.app.get_webview_window("pill") {
+        pill.show().map_err(|e| e.to_string())?;
+    }
     Ok(status)
 }
 pub(crate) fn show_setup(app: &tauri::AppHandle) -> Result<(), String> {

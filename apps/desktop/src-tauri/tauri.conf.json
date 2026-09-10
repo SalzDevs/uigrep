@@ -12,6 +12,7 @@
     "windows": [
       {
         "label": "pill",
+        "visible": false,
         "title": "uigrep",
         "width": 188,
         "height": 54,

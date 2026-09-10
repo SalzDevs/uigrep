@@ -552,7 +552,15 @@ async fn start_capture(state: tauri::State<'_, DaemonState>) -> Result<(), Strin
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(window) = app.get_webview_window("pill") {
+            let completed = app
+                .state::<DaemonState>()
+                .inner
+                .setup
+                .lock()
+                .map(|m| m.data.completed)
+                .unwrap_or(false);
+            let window = app.get_webview_window(if completed { "pill" } else { "setup" });
+            if let Some(window) = window {
                 let _ = window.show();
             }
         }))
@@ -623,6 +631,10 @@ pub fn run() {
             tray.build(app)?;
             if first_run {
                 setup::show_setup(app.handle()).map_err(std::io::Error::other)?;
+            } else {
+                if let Some(pill) = app.get_webview_window("pill") {
+                    pill.show().map_err(std::io::Error::other)?;
+                }
             }
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = run_daemon(state.clone()).await {
