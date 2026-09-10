@@ -3,6 +3,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use futures_util::sink::SinkExt;
+
 use axum::{
     body::Body,
     extract::{
