@@ -1,5 +1,7 @@
 # dependencies
 node_modules/
+.tools/
+apps/desktop/src-tauri/runtime/
 
 # builds
 dist/

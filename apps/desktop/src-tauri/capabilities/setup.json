@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "setup-capability",
+  "description": "Local first-run setup window; no arbitrary filesystem or shell access",
+  "windows": ["setup"],
+  "permissions": ["core:default", "core:window:allow-hide"]
+}

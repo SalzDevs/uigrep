@@ -49,6 +49,32 @@ export class UigrepDaemonClient {
     const headers = new Headers(init.headers);
     headers.set(AUTH_HEADER, this.token);
     if (init.body) headers.set("content-type", "application/json");
-    return fetch(`${this.origin}${path}`, { ...init, headers });
+    return fetch(`${this.origin}${path}`, {
+      ...init,
+      headers,
+      redirect: "error",
+      signal: init.signal ?? AbortSignal.timeout(8_000),
+    });
+  }
+
+  /** Onboarding acknowledgement only; old daemons and non-test captures are normal. */
+  public async verifySetup(sessionId: string): Promise<boolean> {
+    try {
+      const response = await this.request("/v1/setup/verify", {
+        method: "POST",
+        body: JSON.stringify({ sessionId }),
+        signal: AbortSignal.timeout(1_500),
+      });
+      if (!response.ok) return false;
+      const result: unknown = await response.json();
+      return (
+        typeof result === "object" &&
+        result !== null &&
+        "ok" in result &&
+        result.ok === true
+      );
+    } catch {
+      return false;
+    }
   }
 }

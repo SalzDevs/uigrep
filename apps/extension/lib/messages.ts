@@ -1,7 +1,7 @@
 export type BackgroundRequest =
   | { type: "send-capture"; capture: unknown }
-  | { type: "capture-visible-tab" }
-  | { type: "daemon-status" };
+  | { type: "daemon-status" }
+  | { type: "connect-browser" };
 
 export type ContentRequest =
   { type: "start-capture" } | { type: "cancel-capture" };
@@ -9,4 +9,8 @@ export type ContentRequest =
 export type DaemonStatus = {
   connected: boolean;
   configured: boolean;
+  phase:
+    "idle" | "requesting" | "pending" | "connecting" | "connected" | "error";
+  error?: string;
+  expiresAt?: number;
 };

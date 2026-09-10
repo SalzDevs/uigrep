@@ -15,18 +15,24 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "prepare:runtime": "node scripts/prepare-runtime.mjs",
+    "test:runtime": "node scripts/smoke-mcp.mjs",
     "typecheck": "pnpm --filter @uigrep/schema build && pnpm --filter @uigrep/bridge build && pnpm -r typecheck",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.3.1",
+    "esbuild": "^0.25.9",
     "eslint": "^9.35.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^16.3.0",
     "prettier": "^3.6.2",
+    "tar": "^7.5.7",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.42.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "yauzl": "^3.2.0"
   }
 }
