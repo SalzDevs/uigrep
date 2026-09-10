@@ -240,7 +240,8 @@ async function startMockDaemon() {
   };
 }
 
-test("actual companion pairs with a mocked daemon and posts a drag annotation", async (_fixtures, testInfo) => {
+// eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured first argument here
+test("actual companion pairs with a mocked daemon and posts a drag annotation", async ({}, testInfo) => {
   const extensionPath = resolve(
     testInfo.config.rootDir,
     "../apps/extension/.output/chrome-mv3",

@@ -315,13 +315,11 @@ impl SetupMachine {
         Ok(())
     }
     fn finish(&mut self) -> Result<(), String> {
-        if !(self.ready
-            && !self.data.browsers.is_empty()
-            && self.data.agent_configured
-            && self.data.test_capture_id.is_some()
-            && self.data.mcp_verified)
-        {
-            return Err("Setup needs a healthy daemon, an approved browser, a configured agent, and a real test capture retrieved and verified through MCP.".into());
+        if !(self.ready && !self.data.browsers.is_empty() && self.data.agent_configured) {
+            return Err(
+                "Setup needs a healthy daemon, an approved browser, and a configured agent."
+                    .into(),
+            );
         }
         self.data.completed = true;
         Ok(())
@@ -780,6 +778,9 @@ mod tests {
         .unwrap();
         m.ready = true;
         m.data.agent_configured = true;
+        // Browser + agent is enough for one-click setup; the capture test is optional.
+        m.finish().unwrap();
+        m.data.completed = false;
         m.data.test_challenge = Some(Uuid::new_v4().to_string());
         let url = test_url(m.data.test_challenge.as_ref().unwrap());
         let capture = Uuid::new_v4().to_string();
@@ -791,9 +792,7 @@ mod tests {
         assert!(m.verify(&capture).is_err());
         m.retrieved_test = Some(capture.clone());
         assert!(m.verify(&Uuid::new_v4().to_string()).is_err());
-        assert!(m.finish().is_err());
         m.verify(&capture).unwrap();
-        m.finish().unwrap();
         m.note_capture(&Uuid::new_v4().to_string(), &url, true, true);
         assert!(!m.data.mcp_verified);
         assert!(!m.data.completed);

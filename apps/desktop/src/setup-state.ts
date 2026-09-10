@@ -25,17 +25,11 @@ export type ConfigResult = {
   message: string;
 };
 
-export function setupStep(status: SetupStatus): number {
-  if (!status.daemonReady || status.pairedBrowsers.length === 0) return 0;
-  if (!status.agentConfigured) return 1;
-  if (!status.testCaptureId || !status.mcpVerified) return 2;
-  return 3;
-}
-
+/** One-click setup gate: daemon + paired browser + configured agent. */
 export function canFinish(status: SetupStatus): boolean {
-  return setupStep(status) === 3;
-}
-
-export function testPrompt(captureId: string): string {
-  return `Use the uigrep MCP tool uigrep_get_capture with sessionId "${captureId}". Summarize the test annotation. This is an installation test; do not edit any project files.`;
+  return (
+    status.daemonReady &&
+    status.pairedBrowsers.length > 0 &&
+    status.agentConfigured
+  );
 }
