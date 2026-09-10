@@ -5,6 +5,7 @@ type CommandCall = { command: string; args: Record<string, unknown> };
 type SimulatedSetup = {
   status: SetupStatus;
   calls: CommandCall[];
+  autoPair: boolean;
   patch: (next: Partial<SetupStatus>) => void;
 };
 
@@ -45,8 +46,11 @@ async function installNativeSimulation(page: Page): Promise<void> {
       const key = "uigrep-e2e-simulated-setup";
       const saved = sessionStorage.getItem(key);
       const restored = saved
-        ? (JSON.parse(saved) as Pick<SimulatedSetup, "status" | "calls">)
-        : { status: initialStatus, calls: [] };
+        ? (JSON.parse(saved) as Pick<
+            SimulatedSetup,
+            "status" | "calls" | "autoPair"
+          >)
+        : { status: initialStatus, calls: [], autoPair: false };
       const persist = () => {
         sessionStorage.setItem(
           key,
@@ -94,6 +98,9 @@ async function installNativeSimulation(page: Page): Promise<void> {
                 return Promise.resolve(structuredClone(mock.status));
               case "agent_options":
                 return Promise.resolve(structuredClone(agents));
+              case "set_auto_pair":
+                mock.autoPair = Boolean(args.enabled);
+                return Promise.resolve(structuredClone(mock.status));
               case "approve_pairing": {
                 const request = mock.status.pendingPairings.find(
                   (item) => item.id === args.requestId,
@@ -165,7 +172,7 @@ test.describe("Onboarding UI — one-click setup, simulated native IPC", () => {
 
   test("one click configures the agent, approves the browser and finishes", async ({
     page,
-  }, testInfo) => {
+  }) => {
     const requestId = "a612e0f1-5815-4de2-9c02-aa1469d34ca2";
 
     await expect(
@@ -176,38 +183,33 @@ test.describe("Onboarding UI — one-click setup, simulated native IPC", () => {
         exact: false,
       }),
     ).toBeVisible();
-    await page.screenshot({
-      path: testInfo.outputPath("onboarding-oneclick-start.png"),
-      fullPage: true,
-    });
 
     await page.getByRole("button", { name: "Set up uigrep" }).click();
     await expect(
       page.getByRole("button", { name: "Setting up…" }),
     ).toBeDisabled();
-    await expect.poll(() => callsFor(page, "configure_agent")).toHaveLength(1);
+    await expect.poll(() => callsFor(page, "set_auto_pair")).toHaveLength(1);
+    expect(await callsFor(page, "set_auto_pair")).toEqual([
+      { command: "set_auto_pair", args: { enabled: true } },
+    ]);
+    await expect
+      .poll(() => callsFor(page, "configure_agent"))
+      .toHaveLength(1);
     expect(await callsFor(page, "configure_agent")).toEqual([
       { command: "configure_agent", args: { agentId: "vscode" } },
     ]);
 
-    // A pairing request arriving mid-setup is approved automatically.
+    // The backend (not this UI) approves pairings while armed; the UI only
+    // reacts to the resulting paired state.
     await patchStatus(page, {
-      pendingPairings: [
-        { id: requestId, name: "Chrome", origin: "chrome-extension://x" },
-      ],
-    });
-    await expect.poll(() => callsFor(page, "approve_pairing")).toHaveLength(1);
-    expect(await callsFor(page, "approve_pairing")).toEqual([
-      { command: "approve_pairing", args: { requestId } },
-    ]);
-
-    await patchStatus(page, {
+      pendingPairings: [],
       pairedBrowsers: [{ id: requestId, name: "Chrome" }],
     });
     await expect
       .poll(() => page.evaluate(() => window.__onboardingMock.status.completed))
       .toBe(true);
     expect(await callsFor(page, "finish_setup")).toHaveLength(1);
+    expect(await callsFor(page, "approve_pairing")).toHaveLength(0);
   });
 
   test("incomplete state blocks the button and shows errors", async ({
@@ -240,6 +242,12 @@ test.describe("Onboarding UI — one-click setup, simulated native IPC", () => {
     await expect
       .poll(() => callsFor(page, "plugin:window|hide"))
       .toHaveLength(1);
+    await expect
+      .poll(() => callsFor(page, "set_auto_pair"))
+      .toHaveLength(1);
+    expect(await callsFor(page, "set_auto_pair")).toEqual([
+      { command: "set_auto_pair", args: { enabled: false } },
+    ]);
     expect(await callsFor(page, "configure_agent")).toHaveLength(0);
     expect(
       await page.evaluate(() => window.__onboardingMock.status.completed),

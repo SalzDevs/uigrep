@@ -57,19 +57,14 @@ export function Setup() {
     }
   }, []);
 
-  // One-click engine: after the user presses the button, every remaining
-  // step runs automatically as soon as its precondition is met.
+  // One-click engine: the backend auto-approves pairings while armed, so the
+  // frontend only configures the agent and finishes once both sides are ready.
   useEffect(() => {
     if (!auto || !status) return;
     if (status.completed) return;
     const agent = agents.find((a) => a.available) ?? agents[0];
     if (!status.agentConfigured && agent) {
       void step(() => invoke("configure_agent", { agentId: agent.id }));
-      return;
-    }
-    const pending = status.pendingPairings[0];
-    if (pending) {
-      void step(() => invoke("approve_pairing", { requestId: pending.id }));
       return;
     }
     if (canFinish(status)) {
@@ -158,14 +153,24 @@ export function Setup() {
         <button
           className="primary setup-button"
           disabled={auto || busy || !status || !status.daemonReady}
-          onClick={() => setAuto(true)}
+          onClick={() => {
+            setAuto(true);
+            void invoke("set_auto_pair", { enabled: true }).catch((cause) =>
+              setError(String(cause)),
+            );
+          }}
         >
           {auto ? "Setting up…" : "Set up uigrep"}
         </button>
         <button
           className="quiet"
           disabled={busy}
-          onClick={() => void getCurrentWindow().hide()}
+          onClick={() => {
+            void invoke("set_auto_pair", { enabled: false }).catch(
+              () => undefined,
+            );
+            void getCurrentWindow().hide();
+          }}
         >
           Continue later
         </button>

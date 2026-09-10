@@ -575,6 +575,7 @@ pub fn run() {
             setup::begin_browser_setup,
             setup::approve_pairing,
             setup::reject_pairing,
+            setup::set_auto_pair,
             setup::revoke_browser,
             setup::open_test_capture,
             setup::finish_setup,

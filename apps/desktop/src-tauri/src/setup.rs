@@ -39,6 +39,8 @@ fn require_window_label(label: &str, allowed: &[&str]) -> Result<(), String> {
 pub(crate) struct SetupData {
     browsers: Vec<BrowserCredential>,
     agent_configured: bool,
+    /// One-click setup arms this; incoming pair requests are approved automatically.
+    auto_pair: bool,
     pub(crate) test_challenge: Option<String>,
     pub(crate) test_capture_id: Option<String>,
     mcp_verified: bool,
@@ -213,6 +215,7 @@ impl SetupMachine {
             return Err(ApiError { status: StatusCode::TOO_MANY_REQUESTS, message: "Five browsers are already waiting for approval. Reject a request or wait five minutes.".into() });
         }
         let id = Uuid::new_v4().to_string();
+        let approved = self.data.auto_pair;
         self.pending.insert(
             id.clone(),
             PendingPairing {
@@ -222,7 +225,7 @@ impl SetupMachine {
                 origin: origin.into(),
                 secret: r.secret,
                 expires: now + PAIRING_TTL,
-                approved: false,
+                approved,
             },
         );
         Ok(PairResponse {
@@ -322,6 +325,7 @@ impl SetupMachine {
             );
         }
         self.data.completed = true;
+        self.data.auto_pair = false;
         Ok(())
     }
 }
@@ -406,6 +410,18 @@ pub(crate) fn setup_status(
         .lock()
         .map_err(|_| "Setup lock poisoned.")?
         .status())
+}
+#[tauri::command]
+pub(crate) fn set_auto_pair(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, DaemonState>,
+    enabled: bool,
+) -> Result<SetupStatus, String> {
+    require_setup_window(&window)?;
+    mutate(&state, |m| {
+        m.data.auto_pair = enabled;
+        Ok(())
+    })
 }
 #[tauri::command]
 pub(crate) fn begin_browser_setup(
@@ -672,6 +688,37 @@ mod tests {
         }
         assert!(require_window_label("pill", &["setup", "pill"]).is_ok());
         assert!(require_window_label("remote", &["setup", "pill"]).is_err());
+    }
+
+    #[test]
+    fn auto_pair_approves_incoming_requests_immediately() {
+        let mut m = SetupMachine::default();
+        m.data.auto_pair = true;
+        let now = Instant::now();
+        let (id, secret) = request(&mut m, now);
+        assert!(m.pending.get(&id).unwrap().approved);
+        assert_eq!(
+            m.claim(&ClaimRequest { request_id: id, secret }, ORIGIN, now)
+                .unwrap()
+                .status,
+            "approved"
+        );
+        assert_eq!(m.data.browsers.len(), 1);
+    }
+
+    #[test]
+    fn finish_disarms_auto_pair() {
+        let mut m = SetupMachine::default();
+        let now = Instant::now();
+        let (id, secret) = request(&mut m, now);
+        m.pending.get_mut(&id).unwrap().approved = true;
+        m.claim(&ClaimRequest { request_id: id, secret }, ORIGIN, now)
+            .unwrap();
+        m.ready = true;
+        m.data.agent_configured = true;
+        m.data.auto_pair = true;
+        m.finish().unwrap();
+        assert!(!m.data.auto_pair);
     }
 
     const ORIGIN: &str = "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
