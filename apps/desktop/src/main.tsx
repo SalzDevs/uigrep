@@ -73,6 +73,11 @@ function Pill(): React.JSX.Element {
         event.preventDefault();
         void invoke("reopen_setup").catch(() => setState({ kind: "error" }));
       }}
+      onClick={() => {
+        // Fallback trigger: same path the Chrome command uses (daemon event),
+        // so the notch works even if Chrome drops the keyboard shortcut.
+        void invoke("start_capture").catch(() => setState({ kind: "error" }));
+      }}
     >
       <span className="pill__dot" aria-hidden="true" />
       <span className="pill__label">{label}</span>
