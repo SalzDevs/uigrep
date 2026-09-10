@@ -179,6 +179,18 @@ test.describe("Onboarding UI — one-click setup, simulated native IPC", () => {
       page.getByRole("button", { name: "Set up uigrep" }),
     ).toBeEnabled();
     await expect(
+      page.getByText("Waiting — starts when you press Set up"),
+    ).toBeVisible(); // agent box
+    await expect(
+      page.getByText("Waiting — starts after the agent is set up"),
+    ).toBeVisible(); // browser box
+
+    await page.getByRole("button", { name: "Set up uigrep" }).click();
+    await expect(
+      page.getByRole("button", { name: "Setting up…" }),
+    ).toBeDisabled();
+    // The dev-mode companion hint appears in the browser phase while it waits.
+    await expect(
       page.getByText("Dev build: load the unpacked companion", {
         exact: false,
       }),
