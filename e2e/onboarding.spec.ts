@@ -69,7 +69,10 @@ async function installNativeSimulation(page: Page): Promise<void> {
             currentWindow: { label: "setup" },
             currentWebview: { label: "setup" },
           },
-          transformCallback(callback?: (payload: unknown) => void, once = false) {
+          transformCallback(
+            callback?: (payload: unknown) => void,
+            once = false,
+          ) {
             const id = ++callbackId;
             callbacks.set(id, (payload) => {
               if (once) callbacks.delete(id);
@@ -110,7 +113,8 @@ async function installNativeSimulation(page: Page): Promise<void> {
                 return Promise.resolve({
                   agentId: agent.id,
                   configPath: agent.configPath,
-                  message: "Simulated only; no client configuration was written.",
+                  message:
+                    "Simulated only; no client configuration was written.",
                 });
               }
               case "open_test_capture":
@@ -124,7 +128,9 @@ async function installNativeSimulation(page: Page): Promise<void> {
                   !mock.status.testCaptureId ||
                   !mock.status.mcpVerified
                 )
-                  return Promise.reject(new Error("Verification is incomplete"));
+                  return Promise.reject(
+                    new Error("Verification is incomplete"),
+                  );
                 mock.patch({ completed: true });
                 return Promise.resolve(structuredClone(mock.status));
               case "plugin:window|hide":
@@ -142,7 +148,10 @@ async function installNativeSimulation(page: Page): Promise<void> {
   );
 }
 
-async function patchStatus(page: Page, next: Partial<SetupStatus>): Promise<void> {
+async function patchStatus(
+  page: Page,
+  next: Partial<SetupStatus>,
+): Promise<void> {
   await page.evaluate((patch) => window.__onboardingMock.patch(patch), next);
 }
 
@@ -189,7 +198,9 @@ test.describe("Onboarding UI — simulated native IPC, not native tests", () => 
     ).toBeDisabled();
   });
 
-  test("explicit approvals, resume, capture receipt and MCP verification gate completion", async ({ page }, testInfo) => {
+  test("explicit approvals, resume, capture receipt and MCP verification gate completion", async ({
+    page,
+  }, testInfo) => {
     const requestId = "a612e0f1-5815-4de2-9c02-aa1469d34ca2";
     const origin = `chrome-extension://${"a".repeat(32)}`;
     await patchStatus(page, {
@@ -260,9 +271,9 @@ test.describe("Onboarding UI — simulated native IPC, not native tests", () => 
       page.getByText("Waiting for the MCP read receipt", { exact: false }),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Ready" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Finish setup" })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByRole("button", { name: "Finish setup" }),
+    ).toHaveCount(0);
     expect(await callsFor(page, "finish_setup")).toHaveLength(0);
 
     // Reload must resume the saved-but-not-verified state, not reset or finish it.
@@ -271,9 +282,9 @@ test.describe("Onboarding UI — simulated native IPC, not native tests", () => 
       page.getByText("Browser capture received", { exact: false }),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Ready" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Finish setup" })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByRole("button", { name: "Finish setup" }),
+    ).toHaveCount(0);
     await patchStatus(page, { mcpVerified: true });
     await expect(
       page.getByRole("heading", { name: "Point. Explain. Build." }),

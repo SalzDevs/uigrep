@@ -80,7 +80,9 @@ async function startMockDaemon() {
   const handle = async (request: IncomingMessage, response: ServerResponse) => {
     const origin = request.headers.origin;
     if (origin && !extensionOriginPattern.test(origin)) {
-      json(response, 403, { error: "Only Chrome extension origins are allowed" });
+      json(response, 403, {
+        error: "Only Chrome extension origins are allowed",
+      });
       return;
     }
     if (origin) {
@@ -139,7 +141,9 @@ async function startMockDaemon() {
         pairingSecret &&
         (pairingSecret !== body.secret || state.pairingOrigin !== origin)
       ) {
-        json(response, 409, { error: "A different pairing is already pending" });
+        json(response, 409, {
+          error: "A different pairing is already pending",
+        });
         return;
       }
       pairingSecret = body.secret;
@@ -236,7 +240,7 @@ async function startMockDaemon() {
   };
 }
 
-test("actual companion pairs with a mocked daemon and posts a drag annotation", async ({}, testInfo) => {
+test("actual companion pairs with a mocked daemon and posts a drag annotation", async (_fixtures, testInfo) => {
   const extensionPath = resolve(
     testInfo.config.rootDir,
     "../apps/extension/.output/chrome-mv3",
@@ -273,7 +277,9 @@ test("actual companion pairs with a mocked daemon and posts a drag annotation", 
     ).toBe(extensionId);
     await expect.poll(() => daemon.state.requestCount).toBe(1);
     await expect.poll(() => daemon.state.pendingClaims).toBeGreaterThan(0);
-    expect(daemon.state.pairingOrigin).toBe(`chrome-extension://${extensionId}`);
+    expect(daemon.state.pairingOrigin).toBe(
+      `chrome-extension://${extensionId}`,
+    );
 
     const options = await context.newPage();
     await options.goto(`chrome-extension://${extensionId}/options.html`);
