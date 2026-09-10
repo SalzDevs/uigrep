@@ -192,9 +192,7 @@ test.describe("Onboarding UI — one-click setup, simulated native IPC", () => {
     expect(await callsFor(page, "set_auto_pair")).toEqual([
       { command: "set_auto_pair", args: { enabled: true } },
     ]);
-    await expect
-      .poll(() => callsFor(page, "configure_agent"))
-      .toHaveLength(1);
+    await expect.poll(() => callsFor(page, "configure_agent")).toHaveLength(1);
     expect(await callsFor(page, "configure_agent")).toEqual([
       { command: "configure_agent", args: { agentId: "vscode" } },
     ]);
@@ -242,9 +240,7 @@ test.describe("Onboarding UI — one-click setup, simulated native IPC", () => {
     await expect
       .poll(() => callsFor(page, "plugin:window|hide"))
       .toHaveLength(1);
-    await expect
-      .poll(() => callsFor(page, "set_auto_pair"))
-      .toHaveLength(1);
+    await expect.poll(() => callsFor(page, "set_auto_pair")).toHaveLength(1);
     expect(await callsFor(page, "set_auto_pair")).toEqual([
       { command: "set_auto_pair", args: { enabled: false } },
     ]);

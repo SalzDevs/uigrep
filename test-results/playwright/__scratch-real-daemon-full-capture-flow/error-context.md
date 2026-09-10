@@ -29,7 +29,7 @@ Call Log:
   3   | import { createServer } from "node:http";
   4   | import { tmpdir } from "node:os";
   5   | import { join, resolve } from "node:path";
-  6   | 
+  6   |
   7   | test("real daemon: full capture flow", async ({}, testInfo) => {
   8   |   const extensionPath = resolve(
   9   |     testInfo.config.rootDir,
@@ -50,7 +50,7 @@ Call Log:
   24  |   const pagePort = 49199;
   25  |   await new Promise<void>((ok) => server.listen(pagePort, "127.0.0.1", ok));
   26  |   const pageUrl = `http://127.0.0.1:${pagePort}/`;
-  27  | 
+  27  |
   28  |   const profile = await mkdtemp(join(tmpdir(), "uigrep-real-e2e-"));
   29  |   const context = await chromium.launchPersistentContext(profile, {
   30  |     channel: "chromium",
@@ -73,7 +73,7 @@ Call Log:
   47  |       })
 > 48  |       .toBe("Connected");
       |        ^ Error: expect(received).toBe(expected) // Object.is equality
-  49  | 
+  49  |
   50  |     const page = await context.newPage();
   51  |     await page.goto(pageUrl);
   52  |     await page.bringToFront();
@@ -127,5 +127,5 @@ Call Log:
   100 |     await new Promise<void>((ok) => server.close(() => ok()));
   101 |   }
   102 | });
-  103 | 
+  103 |
 ```

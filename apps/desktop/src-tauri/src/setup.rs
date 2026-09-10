@@ -418,10 +418,18 @@ pub(crate) fn set_auto_pair(
     enabled: bool,
 ) -> Result<SetupStatus, String> {
     require_setup_window(&window)?;
-    mutate(&state, |m| {
+    let status = mutate(&state, |m| {
         m.data.auto_pair = enabled;
+        // Requests that arrived before arming are approved now, so a companion
+        // waiting since install is never stranded.
+        if enabled {
+            for pending in m.pending.values_mut() {
+                pending.approved = true;
+            }
+        }
         Ok(())
-    })
+    })?;
+    Ok(status)
 }
 #[tauri::command]
 pub(crate) fn begin_browser_setup(
@@ -688,6 +696,24 @@ mod tests {
         }
         assert!(require_window_label("pill", &["setup", "pill"]).is_ok());
         assert!(require_window_label("remote", &["setup", "pill"]).is_err());
+    }
+
+    #[test]
+    fn arming_retro_approves_earlier_pending_requests() {
+        let mut m = SetupMachine::default();
+        let now = Instant::now();
+        let (id, secret) = request(&mut m, now); // arrived before arming
+        assert!(!m.pending.get(&id).unwrap().approved);
+        m.data.auto_pair = true;
+        for pending in m.pending.values_mut() {
+            pending.approved = true;
+        }
+        assert_eq!(
+            m.claim(&ClaimRequest { request_id: id, secret }, ORIGIN, now)
+                .unwrap()
+                .status,
+            "approved"
+        );
     }
 
     #[test]
