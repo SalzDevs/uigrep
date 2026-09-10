@@ -119,10 +119,23 @@ async function activateCurrentTab(): Promise<void> {
     active: true,
     lastFocusedWindow: true,
   });
-  if (tab?.id)
+  if (tab?.id === undefined) {
+    reportError(
+      new Error(
+        "No active browser tab. Focus the page you want to capture and retry.",
+      ),
+    );
+    return;
+  }
+  try {
     await browser.tabs.sendMessage(tab.id, {
       type: "start-capture",
     } satisfies ContentRequest);
+  } catch {
+    reportError(
+      new Error("This page has no capture script. Reload the page and retry."),
+    );
+  }
 }
 function scheduleReconnect(): void {
   if (reconnectTimer) clearTimeout(reconnectTimer);

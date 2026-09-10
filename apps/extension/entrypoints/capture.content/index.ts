@@ -279,7 +279,10 @@ class CaptureOverlay {
         this.layer.releasePointerCapture(event.pointerId);
       this.shadow.querySelector(".draft")?.remove();
       const rect = rectFromDrag(drag);
-      if (rect.width < 4 || rect.height < 4) return;
+      if (rect.width < 4 || rect.height < 4) {
+        this.toolbar.dataset.error = "Drag a larger region to select it.";
+        return;
+      }
       try {
         this.addAnnotation(rect, "drag");
       } catch (error) {
@@ -293,8 +296,12 @@ class CaptureOverlay {
       this.drag = undefined;
       this.shadow.querySelector(".draft")?.remove();
     };
-    this.layer.addEventListener("pointercancel", cancelDrag);
-    this.layer.addEventListener("lostpointercapture", cancelDrag);
+    this.layer.addEventListener("pointercancel", () => {
+      cancelDrag();
+    });
+    this.layer.addEventListener("lostpointercapture", () => {
+      cancelDrag();
+    });
     document.addEventListener("keydown", this.onKeydown, true);
     window.addEventListener("scroll", this.onScroll, true);
     window.addEventListener("resize", this.onResize);

@@ -507,6 +507,11 @@ fn daemon_router(state: DaemonState) -> Router {
         .route("/v1/captures", get(list_captures).post(create_capture))
         .route("/v1/captures/{id}", get(get_capture))
         .route("/v1/setup/verify", post(setup::verify))
+        // Master-only test hook: fires the same daemon event as the notch
+        // trigger, so real-daemon end-to-end tests can drive the full capture
+        // path without touching the native UI.
+        .route("/v1/trigger-capture", post(trigger_capture))
+        .route("/v1/test-approve-pairing", post(test_approve_pairing))
         .route_layer(middleware::from_fn_with_state(state.clone(), authenticate));
     Router::new()
         .merge(protected)
@@ -547,6 +552,38 @@ async fn start_capture(state: tauri::State<'_, DaemonState>) -> Result<(), Strin
         .send(json!({ "type": "start_capture" }).to_string())
         .map(|_| ())
         .map_err(|_| "No browser companion is connected.".to_string())
+}
+
+async fn trigger_capture(
+    State(state): State<DaemonState>,
+    Extension(auth): Extension<Auth>,
+) -> Result<Json<Value>, ApiError> {
+    if !matches!(auth, Auth::Master) {
+        return Err(ApiError { status: StatusCode::FORBIDDEN, message: "Master credential required.".into() });
+    }
+    let _ = state.inner.app.emit("pill-state", PillState::Selecting);
+    state
+        .inner
+        .events
+        .send(json!({ "type": "start_capture" }).to_string())
+        .map(|_| Json(json!({ "ok": true })))
+        .map_err(|_| ApiError::bad_request("No browser companion is connected."))
+}
+
+async fn test_approve_pairing(
+    State(state): State<DaemonState>,
+    Extension(auth): Extension<Auth>,
+) -> Result<Json<Value>, ApiError> {
+    if !matches!(auth, Auth::Master) {
+        return Err(ApiError { status: StatusCode::FORBIDDEN, message: "Master credential required.".into() });
+    }
+    let mut machine = state
+        .inner
+        .setup
+        .lock()
+        .map_err(|_| ApiError::internal("Setup lock poisoned."))?;
+    let approved = machine.approve_all_pending();
+    Ok(Json(json!({ "ok": true, "approved": approved })))
 }
 
 pub fn run() {

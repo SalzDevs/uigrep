@@ -134,6 +134,15 @@ fn valid_secret(s: &str) -> bool {
 }
 
 impl SetupMachine {
+    /// Test hook: approve every pending pairing (master-token gated upstream).
+    pub(crate) fn approve_all_pending(&mut self) -> usize {
+        self.expire(Instant::now());
+        self.pending
+            .values_mut()
+            .map(|p| p.approved = true)
+            .count()
+    }
+
     fn expire(&mut self, now: Instant) {
         self.pending.retain(|_, p| p.expires > now);
     }
