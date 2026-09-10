@@ -111,8 +111,7 @@ async function forgetCredential(): Promise<void> {
     configured: false,
     connected: false,
     phase: "error",
-    error:
-      "Browser approval expired or was revoked. Click Connect and approve it in desktop Setup.",
+    error: "Browser approval expired. Requesting approval again automatically.",
   };
 }
 async function activateCurrentTab(): Promise<void> {
@@ -203,7 +202,12 @@ async function connectOnce(): Promise<void> {
     authenticated = false;
     if (heartbeatTimer) clearTimeout(heartbeatTimer);
     if (event.code === 1008) {
-      void forgetCredential().catch(reportError);
+      // Stale credential (daemon restarted or state reset). Self-heal: clear
+      // and immediately re-pair instead of waiting for a manual Connect.
+      void (async () => {
+        await forgetCredential();
+        await pair();
+      })().catch(reportError);
       return;
     }
     status = {
