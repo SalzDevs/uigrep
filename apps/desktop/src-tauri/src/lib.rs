@@ -630,6 +630,13 @@ pub fn run() {
                 tray = tray.icon(icon.clone());
             }
             tray.build(app)?;
+            // Belt-and-braces: force a fully transparent window background on
+            // macOS so only the notch is rendered, never an opaque rectangle.
+            #[cfg(target_os = "macos")]
+            if let Some(pill) = app.get_webview_window("pill") {
+                use tauri::window::Color;
+                let _ = pill.set_background_color(Some(Color(0, 0, 0, 0)));
+            }
             if first_run {
                 setup::show_setup(app.handle()).map_err(std::io::Error::other)?;
             } else {

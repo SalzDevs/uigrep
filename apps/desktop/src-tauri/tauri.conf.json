@@ -13,7 +13,6 @@
       {
         "label": "pill",
         "visible": false,
-        "backgroundColor": "#00000000",
         "title": "uigrep",
         "width": 230,
         "height": 54,
