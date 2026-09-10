@@ -21,7 +21,6 @@ export function Setup() {
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
   const [result, setResult] = useState<ConfigResult>();
-  const [copied, setCopied] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [revokeId, setRevokeId] = useState<string>();
 
@@ -367,7 +366,6 @@ export function Setup() {
                           disabled={busy || !status.daemonReady}
                           onClick={() => {
                             void command("open_test_capture");
-                            setCopied(false);
                           }}
                         >
                           {status.testCaptureId
