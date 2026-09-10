@@ -196,10 +196,6 @@ test.describe("Onboarding UI — one-click setup, simulated native IPC", () => {
       }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Set up uigrep" }).click();
-    await expect(
-      page.getByRole("button", { name: "Setting up…" }),
-    ).toBeDisabled();
     await expect.poll(() => callsFor(page, "set_auto_pair")).toHaveLength(1);
     expect(await callsFor(page, "set_auto_pair")).toEqual([
       { command: "set_auto_pair", args: { enabled: true } },

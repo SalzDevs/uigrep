@@ -3,9 +3,10 @@ import ReactDOM from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isRegistered, register } from "@tauri-apps/plugin-global-shortcut";
 import { Setup } from "./Setup";
 import "./styles.css";
+
+const IS_MAC = /Mac/.test(navigator.platform);
 
 type PillState =
   | { kind: "starting" }
@@ -19,7 +20,7 @@ type PillState =
 
 const labels: Record<Exclude<PillState["kind"], "annotated">, string> = {
   starting: "Starting…",
-  ready: "uigrep ready",
+  ready: `${IS_MAC ? "⌥⇧G" : "Alt+Shift+G"} · Select UI`,
   selecting: "Select UI",
   sending: "Sending…",
   sent: "Capture saved",
@@ -31,7 +32,6 @@ function Pill(): React.JSX.Element {
   const [state, setState] = React.useState<PillState>({ kind: "starting" });
 
   React.useEffect(() => {
-    const shortcut = "Alt+Shift+G";
     let disposed = false;
     let unlisten: (() => void) | undefined;
     const initialize = async (): Promise<void> => {
@@ -41,14 +41,6 @@ function Pill(): React.JSX.Element {
       if (disposed) {
         unlisten();
         return;
-      }
-      if (!(await isRegistered(shortcut))) {
-        await register(shortcut, (event) => {
-          if (event.state === "Pressed")
-            void invoke("start_capture").catch(() =>
-              setState({ kind: "error" }),
-            );
-        });
       }
       const status = await invoke<{ daemonReady: boolean }>("setup_status");
       if (!disposed)
