@@ -165,8 +165,8 @@ export function Setup() {
                     </button>
                     {status.developmentMode && (
                       <p className="setup-warning">
-                        Dev build: load the unpacked companion
-                        (<code>apps/extension/.output/chrome-mv3</code>), it
+                        Dev build: load the unpacked companion (
+                        <code>apps/extension/.output/chrome-mv3</code>), it
                         requests pairing automatically.
                       </p>
                     )}
