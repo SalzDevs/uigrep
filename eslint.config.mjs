@@ -7,6 +7,8 @@ export default tseslint.config(
   {
     ignores: [
       ".tools/**",
+      "**/runtime/**",
+      "**/gen/**",
       "**/dist/**",
       "**/.output/**",
       "**/.wxt/**",
@@ -20,6 +22,7 @@ export default tseslint.config(
   ...tseslint.configs.recommendedTypeChecked,
   prettier,
   {
+    files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
       parserOptions: {
@@ -32,5 +35,10 @@ export default tseslint.config(
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/no-floating-promises": "error",
     },
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: { globals: globals.node },
   },
 );

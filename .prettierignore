@@ -1,4 +1,6 @@
 node_modules/
+.tools/
+apps/desktop/src-tauri/runtime/
 dist/
 .output/
 target/
