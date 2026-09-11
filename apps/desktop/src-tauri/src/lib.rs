@@ -432,6 +432,35 @@ async fn submit_capture(
 }
 
 fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
+    // Created lazily on first trigger: a hidden fullscreen transparent window
+    // flashes opaque black on macOS during creation.
+    if app.get_webview_window("capture").is_none() {
+        let monitor = app
+            .primary_monitor()
+            .map_err(|e| e.to_string())?
+            .ok_or("No primary display found.")?;
+        let size = monitor.size();
+        let position = monitor.position();
+        tauri::WebviewWindowBuilder::new(
+            app,
+            "capture",
+            tauri::WebviewUrl::App("index.html?view=capture".into()),
+        )
+        .title("uigrep capture")
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .position(position.x as f64, position.y as f64)
+        .inner_size(size.width as f64, size.height as f64)
+        .build()
+        .map_err(|e| e.to_string())?;
+        #[cfg(target_os = "macos")]
+        if let Some(capture) = app.get_webview_window("capture") {
+            let _ = capture.set_background_color(Some(Color(0, 0, 0, 0)));
+        }
+    }
     let _ = app.emit("pill-state", PillState::Selecting);
     let window = app
         .get_webview_window("capture")

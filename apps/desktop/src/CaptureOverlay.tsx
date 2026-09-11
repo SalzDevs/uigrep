@@ -24,6 +24,14 @@ export function CaptureOverlay() {
   const [error, setError] = React.useState("");
   const pointerId = React.useRef<number | null>(null);
 
+  React.useEffect(() => {
+    const onKeydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") void cancel();
+    };
+    document.addEventListener("keydown", onKeydown, true);
+    return () => document.removeEventListener("keydown", onKeydown, true);
+  }, []);
+
   const cancel = async () => {
     await invoke("cancel_capture").catch(() => undefined);
   };
