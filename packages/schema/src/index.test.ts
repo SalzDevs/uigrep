@@ -50,7 +50,9 @@ describe("capture contracts", () => {
 
   it("creates a compact manifest", () => {
     const manifest = toCaptureManifest(session);
-    expect(manifest.annotations[0]?.image).toBeUndefined();
+    expect(manifest.annotations[0]?.comment).toBe(
+      session.annotations[0]?.comment,
+    );
     expect(JSON.stringify(manifest).length).toBeLessThan(
       CONTEXT_BUDGETS.efficient.manifestBytes * 4,
     );
