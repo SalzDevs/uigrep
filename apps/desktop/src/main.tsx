@@ -62,24 +62,35 @@ function Pill(): React.JSX.Element {
           ? "Capture saved"
           : labels[state.kind];
 
+  const dragOrigin = React.useRef<{ x: number; y: number } | null>(null);
+
   return (
     <button
       className={`pill pill--${state.kind}`}
       type="button"
       aria-label={`${label}. Drag to reposition.`}
       onMouseDown={(event) => {
-        if (event.button === 0)
+        if (event.button === 0) {
+          dragOrigin.current = { x: event.screenX, y: event.screenY };
           void getCurrentWindow()
             .startDragging()
             .catch(() => undefined);
+        }
       }}
       onContextMenu={(event) => {
         event.preventDefault();
         void invoke("reopen_setup").catch(() => setState({ kind: "error" }));
       }}
-      onClick={() => {
-        // Fallback trigger: same path the Chrome command uses (daemon event),
-        // so the notch works even if Chrome drops the keyboard shortcut.
+      onClick={(event) => {
+        // Click = capture trigger. A drag that moved >4px is repositioning,
+        // not a click.
+        const origin = dragOrigin.current;
+        dragOrigin.current = null;
+        if (
+          origin &&
+          Math.hypot(event.screenX - origin.x, event.screenY - origin.y) > 4
+        )
+          return;
         void invoke("start_capture").catch(() => setState({ kind: "error" }));
       }}
     >
