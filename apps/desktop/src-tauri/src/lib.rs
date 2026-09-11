@@ -501,6 +501,11 @@ fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
     let scale = monitor.scale_factor();
     let size = monitor.size().to_logical::<f64>(scale);
     let position = monitor.position().to_logical::<f64>(scale);
+    eprintln!(
+        "[uigrep] overlay target pos={:?} size={:?} scale={scale}",
+        monitor.position(),
+        monitor.size()
+    );
     if app.get_webview_window("capture").is_none() {
         tauri::WebviewWindowBuilder::new(
             app,
@@ -535,6 +540,7 @@ fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
         .set_size(tauri::LogicalSize::new(size.width, size.height))
         .map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
+    eprintln!("[uigrep] overlay shown");
     window.set_focus().map_err(|e| e.to_string())
 }
 
@@ -585,6 +591,11 @@ pub fn run() {
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
+                    eprintln!(
+                        "[uigrep] shortcut event {} state {:?}",
+                        shortcut.to_string(),
+                        event.state
+                    );
                     // Compare parsed shortcuts: `shortcut.to_string()` renders
                     // as "alt+shift+KeyG", never as the source spelling.
                     if event.state
