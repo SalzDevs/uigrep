@@ -377,25 +377,38 @@ async fn submit_capture(
     let capture_dir = config_dir.join("captures").join(&capture_id);
     std::fs::create_dir_all(&capture_dir).map_err(|e| e.to_string())?;
 
-    // Hide the overlay so its outlines never leak into the pixels.
+    // Hide the overlay so its outlines never leak into the pixels; hide is
+    // async on macOS — give the compositor a beat before grabbing pixels.
     if let Some(window) = state.inner.app.get_webview_window("capture") {
         window.hide().map_err(|e| e.to_string())?;
+        std::thread::sleep(std::time::Duration::from_millis(120));
     }
+
+    // Region inputs are capture-window-local (CSS points). Convert to global
+    // screen points for screencapture and stored rects.
+    let (origin_x, origin_y) = if let Some(window) = state.inner.app.get_webview_window("capture") {
+        let pos = window.outer_position().map_err(|e| e.to_string())?;
+        (pos.x as f64, pos.y as f64)
+    } else {
+        (0.0, 0.0)
+    };
 
     let (app_name, bundle_id, window_title) = frontmost_app()?;
     let mut annotations = Vec::with_capacity(regions.len());
     for (index, region) in regions.iter().enumerate() {
         let width = region.width.max(4.0);
         let height = region.height.max(4.0);
+        let global_x = origin_x + region.x;
+        let global_y = origin_y + region.y;
         let path = capture_dir.join(format!("a{}.png", index + 1));
-        capture_region_png(region.x, region.y, width, height, &path)?;
+        capture_region_png(global_x, global_y, width, height, &path)?;
         let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
         let (iw, ih) = png_dimensions(&bytes)?;
         annotations.push(json!({
             "id": Uuid::new_v4().to_string(),
             "order": index + 1,
             "comment": region.comment,
-            "rect": { "x": region.x, "y": region.y, "width": width, "height": height },
+            "rect": { "x": global_x, "y": global_y, "width": width, "height": height },
             "image": {
                 "resourceUri": format!(
                     "uigrep://captures/{capture_id}/{}",
@@ -439,8 +452,9 @@ fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
             .primary_monitor()
             .map_err(|e| e.to_string())?
             .ok_or("No primary display found.")?;
-        let size = monitor.size();
-        let position = monitor.position();
+        let scale = monitor.scale_factor();
+        let size = monitor.size().to_logical::<f64>(scale);
+        let position = monitor.position().to_logical::<f64>(scale);
         tauri::WebviewWindowBuilder::new(
             app,
             "capture",
@@ -452,8 +466,8 @@ fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
         .always_on_top(true)
         .skip_taskbar(true)
         .shadow(false)
-        .position(position.x as f64, position.y as f64)
-        .inner_size(size.width as f64, size.height as f64)
+        .position(position.x, position.y)
+        .inner_size(size.width, size.height)
         .build()
         .map_err(|e| e.to_string())?;
         #[cfg(target_os = "macos")]

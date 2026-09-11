@@ -1,5 +1,6 @@
 import React from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 type Region = {
   x: number;
@@ -35,6 +36,25 @@ export function CaptureOverlay() {
   const cancel = async () => {
     await invoke("cancel_capture").catch(() => undefined);
   };
+
+  // Fresh state on every trigger: the overlay window persists between
+  // captures, so reset when the daemon announces a new selection phase.
+  React.useEffect(() => {
+    let disposed = false;
+    const unlisten = listen("pill-state", (event) => {
+      const payload = event.payload as { kind?: string };
+      if (!disposed && payload.kind === "selecting") {
+        setRegions([]);
+        setEditing(null);
+        setDraft(null);
+        setError("");
+      }
+    });
+    return () => {
+      disposed = true;
+      void unlisten.then((fn) => fn());
+    };
+  }, []);
 
   const startPointer = (event: React.PointerEvent) => {
     if (event.button !== 0 || pointerId.current !== null) return;
