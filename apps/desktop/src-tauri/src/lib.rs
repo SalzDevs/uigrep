@@ -249,6 +249,21 @@ fn daemon_router(state: DaemonState) -> Router {
         .route("/v1/health", get(health))
         .route("/v1/captures", get(list_captures).post(create_capture))
         .route("/v1/captures/{id}", get(get_capture))
+        // Master-only: drives the exact shortcut path for automated e2e.
+        .route(
+            "/v1/trigger-capture",
+            post(async |State(state): State<DaemonState>| {
+                // Window creation/moves must happen on the main thread.
+                let app_for_thread = state.inner.app.clone();
+                let app_handle = state.inner.app.clone();
+                let _ = app_for_thread.run_on_main_thread(move || {
+                    if let Err(error) = show_capture_overlay(&app_handle) {
+                        eprintln!("[uigrep] http trigger failed: {error}");
+                    }
+                });
+                Json(json!({ "ok": true })).into_response()
+            }),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             authenticate,
@@ -441,6 +456,9 @@ async fn submit_capture(
         .map_err(|e| format!("Capture rejected: {e}"))?;
     store_capture(&state, &capture).map_err(|e| e.message)?;
     let _ = state.inner.app.emit("pill-state", PillState::Sent);
+    if let Some(pill) = state.inner.app.get_webview_window("pill") {
+        let _ = pill.show();
+    }
     Ok(())
 }
 
@@ -459,6 +477,8 @@ fn float_over_all_spaces(window: &tauri::WebviewWindow) -> Result<(), String> {
     let behavior: u64 = CAN_JOIN_ALL_SPACES | FULL_SCREEN_AUXILIARY;
     unsafe {
         let _: () = objc2::msg_send![ns_window, setCollectionBehavior: behavior];
+        let readback: u64 = objc2::msg_send![ns_window, collectionBehavior];
+        eprintln!("[uigrep] collectionBehavior now: {readback:#x} (want {behavior:#x})");
     }
     Ok(())
 }
@@ -529,6 +549,10 @@ fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
         }
     }
     let _ = app.emit("pill-state", PillState::Selecting);
+    // The notch sits exactly where the capture toolbar renders — hide it.
+    if let Some(pill) = app.get_webview_window("pill") {
+        let _ = pill.hide();
+    }
     let window = app
         .get_webview_window("capture")
         .ok_or("The capture overlay is missing from this build.")?;
@@ -541,6 +565,16 @@ fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
     eprintln!("[uigrep] overlay shown");
+    // CanJoinAllSpaces windows need an explicit order-front regardless of
+    // activation state to appear on the current space.
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::runtime::AnyObject;
+        let ns = window.ns_window().map_err(|e| e.to_string())? as *mut AnyObject;
+        if !ns.is_null() {
+            let _: () = objc2::msg_send![ns, orderFrontRegardless];
+        }
+    }
     window.set_focus().map_err(|e| e.to_string())
 }
 
@@ -555,6 +589,9 @@ fn cancel_capture(app: tauri::AppHandle) -> Result<(), String> {
         window.hide().map_err(|e| e.to_string())?;
     }
     let _ = app.emit("pill-state", PillState::Ready);
+    if let Some(pill) = app.get_webview_window("pill") {
+        let _ = pill.show();
+    }
     Ok(())
 }
 
@@ -654,6 +691,10 @@ pub fn run() {
             use tauri_plugin_global_shortcut::GlobalShortcutExt;
             app.global_shortcut()
                 .register(CAPTURE_SHORTCUT)
+                .map_err(std::io::Error::other)?;
+            // Diagnostic: does ANY global hotkey reach us from the keyboard?
+            app.global_shortcut()
+                .register("Control+Option+U")
                 .map_err(std::io::Error::other)?;
 
             let setup_item =
