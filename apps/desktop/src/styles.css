@@ -105,3 +105,129 @@ body {
     animation: none !important;
   }
 }
+
+/* Capture overlay (native desktop selection) */
+html[data-view="capture"],
+html[data-view="capture"] body,
+html[data-view="capture"] #root {
+  background: transparent;
+}
+.capture-layer {
+  position: fixed;
+  inset: 0;
+  cursor: crosshair;
+  background: rgba(15, 23, 42, 0.08);
+  font-family: inherit;
+}
+.capture-draft,
+.capture-outline {
+  position: fixed;
+  border: 2px solid #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25);
+}
+.capture-draft {
+  pointer-events: none;
+  border-style: dashed;
+}
+.capture-marker {
+  position: absolute;
+  right: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid white;
+  border-radius: 50%;
+  color: white;
+  background: #0284c7;
+  font: 800 14px/1 inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.capture-composer {
+  position: absolute;
+  right: -2px;
+  top: 34px;
+  width: 300px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #0f172a;
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.35);
+  cursor: default;
+}
+.capture-composer textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  padding: 9px;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  color: #f8fafc;
+  background: #1e293b;
+  font: 13px/1.45 inherit;
+}
+.capture-toolbar {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 330px;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 14px 36px rgba(2, 6, 23, 0.34);
+  cursor: default;
+}
+.capture-count {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 650;
+}
+.capture-error {
+  color: #fda4af;
+  font-size: 12px;
+}
+.capture-toolbar button {
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 999px;
+  color: #e2e8f0;
+  background: #334155;
+  font: 600 12px/1 inherit;
+  cursor: pointer;
+}
+.capture-toolbar button.primary {
+  color: #082f49;
+  background: #7dd3fc;
+}
+.capture-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.capture-composer .button-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.capture-composer button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  color: #e2e8f0;
+  background: #334155;
+  font: 600 12px/1 inherit;
+  cursor: pointer;
+}
+.capture-composer button.primary {
+  color: #082f49;
+  background: #7dd3fc;
+}

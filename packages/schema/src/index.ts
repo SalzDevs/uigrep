@@ -1,173 +1,122 @@
 import { z } from "zod";
 
-export const SCHEMA_VERSION = "1.0.0" as const;
-
-export const CONTEXT_BUDGETS = {
-  efficient: {
-    manifestBytes: 2_048,
-    annotationBytes: 1_024,
-    rankedTargets: 5,
-    ancestorDepth: 3,
-    domBytes: 2_048,
-    styleFacts: 20,
-  },
-  balanced: {
-    manifestBytes: 4_096,
-    annotationBytes: 2_048,
-    rankedTargets: 10,
-    ancestorDepth: 5,
-    domBytes: 4_096,
-    styleFacts: 40,
-  },
-  deep: {
-    manifestBytes: 8_192,
-    annotationBytes: 4_096,
-    rankedTargets: 20,
-    ancestorDepth: 8,
-    domBytes: 12_288,
-    styleFacts: 100,
-  },
-} as const;
-
-export const contextModeSchema = z.enum(["efficient", "balanced", "deep"]);
-export type ContextMode = z.infer<typeof contextModeSchema>;
+export const SCHEMA_VERSION = 2;
 
 export const rectSchema = z.object({
-  x: z.number().finite(),
-  y: z.number().finite(),
-  width: z.number().finite().nonnegative(),
-  height: z.number().finite().nonnegative(),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().nonnegative(),
+  height: z.number().nonnegative(),
 });
 export type Rect = z.infer<typeof rectSchema>;
 
-export const selectorSetSchema = z.object({
-  testId: z.string().max(256).optional(),
-  id: z.string().max(256).optional(),
-  css: z.string().max(2_048).optional(),
-  xpath: z.string().max(2_048).optional(),
-  role: z.string().max(128).optional(),
-  accessibleName: z.string().max(512).optional(),
+/** Accessibility element exposed by the OS AX tree under the region. */
+export const elementSchema = z.object({
+  role: z.string().min(1).max(64),
+  label: z.string().max(2_000).optional(),
+  identifier: z.string().max(512).optional(),
+  value: z.string().max(2_000).optional(),
 });
+export type Element = z.infer<typeof elementSchema>;
 
-export const targetCandidateSchema = z.object({
-  id: z.string().uuid(),
-  rank: z.number().int().min(1),
-  tag: z.string().max(64),
-  text: z.string().max(2_000),
-  rect: rectSchema,
-  selectors: selectorSetSchema,
-  attributes: z.record(z.string(), z.string().max(2_000)).default({}),
-  domSnippet: z.string().max(12_288),
-  styleFacts: z.record(z.string(), z.string().max(1_024)).default({}),
-  score: z.number().min(0).max(1),
-});
-export type TargetCandidate = z.infer<typeof targetCandidateSchema>;
-
-export const screenshotRefSchema = z.object({
+/** Region crop pixels, stored locally. */
+export const imageRefSchema = z.object({
   resourceUri: z.string().startsWith("uigrep://"),
-  mimeType: z.enum(["image/png", "image/webp", "image/jpeg"]),
+  mimeType: z.enum(["image/png", "image/webp"]),
   byteLength: z.number().int().nonnegative(),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
 });
+export type ImageRef = z.infer<typeof imageRefSchema>;
+
+/** The app surface the capture was taken from. Web pages are just windows. */
+export const appSchema = z.object({
+  name: z.string().min(1).max(200),
+  bundleId: z.string().max(300),
+  windowTitle: z.string().max(500).optional(),
+  url: z.string().url().optional(),
+});
+export type AppSurface = z.infer<typeof appSchema>;
 
 export const annotationSchema = z.object({
   id: z.string().uuid(),
-  order: z.number().int().positive(),
+  order: z.number().int().min(1),
   comment: z.string().max(4_000).default(""),
-  selectionMethod: z.enum(["click", "drag"]),
-  viewportRect: rectSchema,
-  pageRect: rectSchema,
-  scroll: z.object({ x: z.number().finite(), y: z.number().finite() }),
-  screenshot: screenshotRefSchema.optional(),
-  targets: z.array(targetCandidateSchema).max(20),
-  hasMoreTargets: z.boolean().default(false),
-  status: z
-    .enum(["pending", "in_progress", "resolved", "blocked"])
-    .default("pending"),
+  rect: rectSchema,
+  image: imageRefSchema,
+  elements: z.array(elementSchema).max(50).default([]),
 });
 export type Annotation = z.infer<typeof annotationSchema>;
 
-export const annotationRelationshipSchema = z.object({
-  type: z.enum(["reference", "match", "align", "preserve", "avoid-changing"]),
-  sourceAnnotationId: z.string().uuid(),
-  targetAnnotationId: z.string().uuid(),
-  properties: z.array(z.string().max(128)).max(20).default([]),
-});
-
 export const captureSessionSchema = z.object({
-  schemaVersion: z.literal(SCHEMA_VERSION),
+  schemaVersion: z.literal(2),
   id: z.string().uuid(),
   capturedAt: z.string().datetime(),
-  status: z.enum(["draft", "pending", "in_progress", "resolved", "blocked"]),
-  page: z.object({
-    url: z.string().url().max(8_192),
-    title: z.string().max(1_000),
-    viewport: z.object({
-      width: z.number().int().positive(),
-      height: z.number().int().positive(),
-      devicePixelRatio: z.number().positive().max(10),
-    }),
-    scroll: z.object({ x: z.number().finite(), y: z.number().finite() }),
-    colorScheme: z.enum(["light", "dark", "no-preference"]),
-  }),
+  status: z.enum(["pending", "retrieved"]),
+  app: appSchema,
   annotations: z.array(annotationSchema).min(1).max(50),
-  relationships: z.array(annotationRelationshipSchema).max(100).default([]),
+  relationships: z
+    .array(
+      z.object({
+        from: z.string().uuid(),
+        to: z.string().uuid(),
+        kind: z.enum(["related", "duplicate"]),
+      }),
+    )
+    .max(50)
+    .default([]),
 });
 export type CaptureSession = z.infer<typeof captureSessionSchema>;
 
-export const captureManifestSchema = captureSessionSchema
-  .pick({
-    schemaVersion: true,
-    id: true,
-    capturedAt: true,
-    status: true,
-    page: true,
-  })
-  .extend({
-    annotations: z.array(
+export const captureManifestSchema = captureSessionSchema.extend({
+  annotations: z
+    .array(
       annotationSchema
-        .pick({ id: true, order: true, comment: true, status: true })
-        .extend({
-          targetSummary: z.string().max(500),
-        }),
-    ),
-    relationshipCount: z.number().int().nonnegative(),
-  });
+        .pick({
+          id: true,
+          order: true,
+          comment: true,
+          rect: true,
+        })
+        .strict(),
+    )
+    .max(50),
+});
 export type CaptureManifest = z.infer<typeof captureManifestSchema>;
 
-export const daemonEventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("start_capture") }),
-  z.object({ type: z.literal("cancel_capture") }),
-  z.object({
-    type: z.literal("state_changed"),
-    state: z.enum(["ready", "selecting", "sending", "sent", "error", "paused"]),
-    annotationCount: z.number().int().nonnegative().optional(),
-  }),
-  z.object({ type: z.literal("capture_stored"), sessionId: z.string().uuid() }),
-]);
-export type DaemonEvent = z.infer<typeof daemonEventSchema>;
+/**
+ * Progressive disclosure budgets. Pixel and element evidence is opt-in per
+ * annotation; the manifest stays compact by default.
+ */
+export const CONTEXT_BUDGETS = {
+  efficient: { manifestBytes: 2_048, annotationBytes: 1_024, maxElements: 5 },
+  balanced: { manifestBytes: 4_096, annotationBytes: 2_048, maxElements: 20 },
+  deep: { manifestBytes: 8_192, annotationBytes: 4_096, maxElements: 50 },
+} as const;
+export type ContextMode = keyof typeof CONTEXT_BUDGETS;
 
-export function summarizeTarget(target: TargetCandidate | undefined): string {
-  if (!target) return "Visual region";
-  const identity =
-    target.selectors.testId ?? target.selectors.accessibleName ?? target.text;
-  return [target.tag, identity.trim()]
-    .filter(Boolean)
-    .join(" · ")
-    .slice(0, 500);
+export const contextModeSchema = z.enum(["efficient", "balanced", "deep"]);
+
+export function summarizeElement(element: Element | undefined): string {
+  if (!element) return "Selected UI";
+  return (
+    element.label ??
+    element.identifier ??
+    (element.value
+      ? `${element.role} “${element.value.slice(0, 40)}”`
+      : element.role)
+  );
 }
 
-export function toCaptureManifest(session: CaptureSession): CaptureManifest {
-  return captureManifestSchema.parse({
-    ...session,
-    annotations: session.annotations.map((annotation) => ({
+export function toCaptureManifest(capture: CaptureSession): CaptureManifest {
+  return {
+    ...capture,
+    status: "retrieved",
+    annotations: capture.annotations.map((annotation) => ({
       id: annotation.id,
       order: annotation.order,
       comment: annotation.comment,
-      status: annotation.status,
-      targetSummary: summarizeTarget(annotation.targets[0]),
+      rect: annotation.rect,
     })),
-    relationshipCount: session.relationships.length,
-  });
+  };
 }

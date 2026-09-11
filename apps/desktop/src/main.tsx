@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Setup } from "./Setup";
+import { CaptureOverlay } from "./CaptureOverlay";
 import "./styles.css";
 
 const IS_MAC = /Mac/.test(navigator.platform);
@@ -12,19 +13,18 @@ type PillState =
   | { kind: "starting" }
   | { kind: "ready" }
   | { kind: "selecting" }
-  | { kind: "annotated"; count: number }
   | { kind: "sending" }
   | { kind: "sent" }
-  | { kind: "error" }
+  | { kind: "error"; message?: string }
   | { kind: "paused" };
 
-const labels: Record<Exclude<PillState["kind"], "annotated">, string> = {
+const labels: Record<
+  Exclude<PillState["kind"], "sending" | "sent" | "error">,
+  string
+> = {
   starting: "Starting…",
   ready: `${IS_MAC ? "⌥⇧G" : "Alt+Shift+G"} · Select UI`,
-  selecting: "Select UI",
-  sending: "Sending…",
-  sent: "Capture saved",
-  error: "Needs attention",
+  selecting: "Drag a region…",
   paused: "uigrep paused",
 };
 
@@ -54,9 +54,13 @@ function Pill(): React.JSX.Element {
   }, []);
 
   const label =
-    state.kind === "annotated"
-      ? `${state.count} annotations`
-      : labels[state.kind];
+    state.kind === "error"
+      ? (state.message ?? "Needs attention")
+      : state.kind === "sending"
+        ? "Capturing…"
+        : state.kind === "sent"
+          ? "Capture saved"
+          : labels[state.kind as keyof typeof labels];
 
   return (
     <button
@@ -85,8 +89,9 @@ function Pill(): React.JSX.Element {
   );
 }
 
-const isSetup = new URLSearchParams(location.search).get("view") === "setup";
-document.documentElement.dataset.view = isSetup ? "setup" : "pill";
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  isSetup ? <Setup /> : <Pill />,
-);
+const view = new URLSearchParams(location.search).get("view") ?? "pill";
+document.documentElement.dataset.view = view;
+const root = ReactDOM.createRoot(document.getElementById("root")!);
+if (view === "setup") root.render(<Setup />);
+else if (view === "capture") root.render(<CaptureOverlay />);
+else root.render(<Pill />);

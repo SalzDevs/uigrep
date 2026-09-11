@@ -7,27 +7,30 @@ import {
 } from "./index.js";
 
 const capture = captureSessionSchema.parse({
-  schemaVersion: "1.0.0",
+  schemaVersion: 2,
   id: "550e8400-e29b-41d4-a716-446655440000",
-  capturedAt: "2026-09-09T12:00:00.000Z",
+  capturedAt: "2026-09-11T10:24:00.000Z",
   status: "pending",
-  page: {
-    url: "http://localhost:3000/pricing",
-    title: "Pricing",
-    viewport: { width: 1440, height: 900, devicePixelRatio: 1 },
-    scroll: { x: 0, y: 0 },
-    colorScheme: "light",
+  app: {
+    name: "Ledger",
+    bundleId: "com.salzdevs.ledger",
+    windowTitle: "Invoices — March",
   },
   annotations: [
     {
       id: "550e8400-e29b-41d4-a716-446655440001",
       order: 1,
       comment: "Align the cards.",
-      selectionMethod: "drag",
-      viewportRect: { x: 10, y: 20, width: 300, height: 100 },
-      pageRect: { x: 10, y: 20, width: 300, height: 100 },
-      scroll: { x: 0, y: 0 },
-      targets: [],
+      rect: { x: 10, y: 20, width: 300, height: 100 },
+      image: {
+        resourceUri:
+          "uigrep://captures/550e8400-e29b-41d4-a716-446655440000/a1.png",
+        mimeType: "image/png",
+        byteLength: 12_400,
+        width: 300,
+        height: 100,
+      },
+      elements: [],
     },
   ],
 });

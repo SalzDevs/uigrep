@@ -102,33 +102,9 @@ export function Setup() {
             text: `Configuring ${agents.find((a) => a.available)?.name ?? agents[0]?.name ?? "agent"}…`,
           };
 
-  // Phase 3 — browser companion. Runs after the agent phase.
-  const browserPhase: Phase = !auto
-    ? { state: "waiting", text: "Waiting — starts after the agent is set up" }
-    : !status?.agentConfigured
-      ? { state: "waiting", text: "Waiting for the agent setup to finish" }
-      : status.pairedBrowsers.length
-        ? {
-            state: "done",
-            text: "Paired",
-            detail: status.pairedBrowsers.map((b) => b.name).join(", "),
-          }
-        : status.pendingPairings.length
-          ? { state: "active", text: "Approving your browser…" }
-          : {
-              state: "active",
-              text: "Waiting for the browser companion to connect",
-              detail: status.developmentMode
-                ? "Dev build: load the unpacked companion — it pairs by itself."
-                : status.storeUrl
-                  ? "Install the Chrome companion to continue."
-                  : undefined,
-            };
-
   const boxes: { title: string; phase: Phase }[] = [
     { title: "Desktop app", phase: desktopPhase },
     { title: "Coding agents", phase: agentPhase },
-    { title: "Browser companion", phase: browserPhase },
   ];
 
   if (status?.completed) {
@@ -214,9 +190,6 @@ export function Setup() {
           disabled={auto || busy || !status || !status.daemonReady}
           onClick={() => {
             setAuto(true);
-            void invoke("set_auto_pair", { enabled: true }).catch((cause) =>
-              setError(String(cause)),
-            );
           }}
         >
           {auto ? "Setting up…" : "Set up uigrep"}
@@ -225,9 +198,6 @@ export function Setup() {
           className="quiet"
           disabled={busy}
           onClick={() => {
-            void invoke("set_auto_pair", { enabled: false }).catch(
-              () => undefined,
-            );
             void getCurrentWindow().hide();
           }}
         >

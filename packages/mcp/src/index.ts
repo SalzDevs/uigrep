@@ -7,6 +7,7 @@ import {
   CONTEXT_BUDGETS,
   contextModeSchema,
   toCaptureManifest,
+  type Annotation,
 } from "@uigrep/schema";
 import { z } from "zod";
 
@@ -19,7 +20,7 @@ async function main(): Promise<void> {
     await loadToken(),
     process.env.UIGREP_DAEMON_ORIGIN,
   );
-  const server = new McpServer({ name: "uigrep", version: "0.1.0" });
+  const server = new McpServer({ name: "uigrep", version: "0.2.0" });
 
   server.registerTool(
     "uigrep_list_captures",
@@ -41,12 +42,11 @@ async function main(): Promise<void> {
     "uigrep_get_capture",
     {
       description:
-        "Get a compact capture manifest. Search the harness current working directory using its comments and target summaries before requesting deeper evidence.",
+        "Get a compact capture manifest: the app surface, the user's comments and the selected regions. Search the harness current working directory using these before requesting deeper evidence.",
       inputSchema: z.object({ sessionId: z.string().uuid() }),
     },
     async ({ sessionId }) => {
       const manifest = toCaptureManifest(await client.getCapture(sessionId));
-      await client.verifySetup(sessionId);
       return {
         content: [{ type: "text", text: asText(manifest) }],
         structuredContent: manifest,
@@ -58,19 +58,17 @@ async function main(): Promise<void> {
     "uigrep_get_annotation_context",
     {
       description:
-        "Get bounded evidence for one annotation only after the compact manifest and a workspace search are insufficient. Screenshots remain referenced, not embedded.",
+        "Get bounded evidence for one annotation: the region screenshot (referenced, not embedded) and any accessibility elements the OS exposed inside the region. Only call this after the compact manifest and a workspace search are insufficient.",
       inputSchema: z.object({
         sessionId: z.string().uuid(),
         annotationId: z.string().uuid(),
         mode: contextModeSchema.default("efficient"),
-        include: z
-          .array(z.enum(["targets", "dom", "styles", "screenshot"]))
-          .default(["targets"]),
+        include: z.array(z.enum(["elements", "image"])).default(["elements"]),
       }),
     },
     async ({ sessionId, annotationId, mode, include }) => {
       const capture = await client.getCapture(sessionId);
-      const annotation = capture.annotations.find(
+      const annotation: Annotation | undefined = capture.annotations.find(
         (candidate) => candidate.id === annotationId,
       );
       if (!annotation)
@@ -80,42 +78,14 @@ async function main(): Promise<void> {
         id: annotation.id,
         order: annotation.order,
         comment: annotation.comment,
-        selectionMethod: annotation.selectionMethod,
-        viewportRect: annotation.viewportRect,
-        pageRect: annotation.pageRect,
-        targets: include.includes("targets")
-          ? annotation.targets.slice(0, budget.rankedTargets).map((target) => ({
-              id: target.id,
-              rank: target.rank,
-              tag: target.tag,
-              text: target.text,
-              rect: target.rect,
-              selectors: target.selectors,
-              attributes: target.attributes,
-              score: target.score,
-              ...(include.includes("dom")
-                ? { domSnippet: target.domSnippet.slice(0, budget.domBytes) }
-                : {}),
-              ...(include.includes("styles")
-                ? {
-                    styleFacts: Object.fromEntries(
-                      Object.entries(target.styleFacts).slice(
-                        0,
-                        budget.styleFacts,
-                      ),
-                    ),
-                  }
-                : {}),
-            }))
+        rect: annotation.rect,
+        app: capture.app,
+        elements: include.includes("elements")
+          ? annotation.elements.slice(0, budget.maxElements)
           : [],
-        ...(include.includes("screenshot")
-          ? { screenshot: annotation.screenshot }
-          : {}),
-        hasMore:
-          annotation.targets.length > budget.rankedTargets ||
-          annotation.hasMoreTargets,
+        ...(include.includes("image") ? { image: annotation.image } : {}),
+        hasMoreElements: annotation.elements.length > budget.maxElements,
       };
-      await client.verifySetup(sessionId);
       return {
         content: [{ type: "text", text: asText(context) }],
         structuredContent: context,

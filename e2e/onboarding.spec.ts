@@ -5,7 +5,6 @@ type CommandCall = { command: string; args: Record<string, unknown> };
 type SimulatedSetup = {
   status: SetupStatus;
   calls: CommandCall[];
-  autoPair: boolean;
   patch: (next: Partial<SetupStatus>) => void;
 };
 
@@ -17,13 +16,8 @@ declare global {
 
 const initialStatus: SetupStatus = {
   daemonReady: true,
-  pairedBrowsers: [],
-  pendingPairings: [],
   agentConfigured: false,
-  testCaptureId: null,
-  mcpVerified: false,
   completed: false,
-  storeUrl: null,
   developmentMode: true,
   error: null,
 };
@@ -41,16 +35,13 @@ const agents: AgentOption[] = [
 async function installNativeSimulation(page: Page): Promise<void> {
   await page.addInitScript(
     ({ initialStatus, agents }) => {
-      // This runs before the actual React frontend, including after reload.
-      // Storage is isolated to this test's browser context, not a client file.
+      // Runs before the React frontend, including after reload. Storage is
+      // isolated to this test's browser context, not a client file.
       const key = "uigrep-e2e-simulated-setup";
       const saved = sessionStorage.getItem(key);
       const restored = saved
-        ? (JSON.parse(saved) as Pick<
-            SimulatedSetup,
-            "status" | "calls" | "autoPair"
-          >)
-        : { status: initialStatus, calls: [], autoPair: false };
+        ? (JSON.parse(saved) as Pick<SimulatedSetup, "status" | "calls">)
+        : { status: initialStatus, calls: [] };
       const persist = () => {
         sessionStorage.setItem(
           key,
@@ -98,21 +89,6 @@ async function installNativeSimulation(page: Page): Promise<void> {
                 return Promise.resolve(structuredClone(mock.status));
               case "agent_options":
                 return Promise.resolve(structuredClone(agents));
-              case "set_auto_pair":
-                mock.autoPair = Boolean(args.enabled);
-                return Promise.resolve(structuredClone(mock.status));
-              case "approve_pairing": {
-                const request = mock.status.pendingPairings.find(
-                  (item) => item.id === args.requestId,
-                );
-                if (!request)
-                  return Promise.reject(new Error("No pending request"));
-                mock.patch({
-                  pendingPairings: [],
-                  pairedBrowsers: [{ id: request.id, name: request.name }],
-                });
-                return Promise.resolve(structuredClone(mock.status));
-              }
               case "configure_agent": {
                 const agent = agents.find((item) => item.id === args.agentId);
                 if (!agent) return Promise.reject(new Error("Unknown agent"));
@@ -125,11 +101,7 @@ async function installNativeSimulation(page: Page): Promise<void> {
                 });
               }
               case "finish_setup": {
-                if (
-                  !mock.status.daemonReady ||
-                  !mock.status.pairedBrowsers.length ||
-                  !mock.status.agentConfigured
-                )
+                if (!mock.status.daemonReady || !mock.status.agentConfigured)
                   return Promise.reject(new Error("Setup is incomplete"));
                 mock.patch({ completed: true });
                 return Promise.resolve(structuredClone(mock.status));
@@ -170,52 +142,27 @@ test.describe("Onboarding UI — one-click setup, simulated native IPC", () => {
     await page.goto("/?view=setup");
   });
 
-  test("one click configures the agent, approves the browser and finishes", async ({
-    page,
-  }) => {
-    const requestId = "a612e0f1-5815-4de2-9c02-aa1469d34ca2";
-
+  test("one click configures the agent and finishes", async ({ page }) => {
     await expect(
       page.getByRole("button", { name: "Set up uigrep" }),
     ).toBeEnabled();
     await expect(
       page.getByText("Waiting — starts when you press Set up"),
-    ).toBeVisible(); // agent box
-    await expect(
-      page.getByText("Waiting — starts after the agent is set up"),
-    ).toBeVisible(); // browser box
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Set up uigrep" }).click();
     await expect(
       page.getByRole("button", { name: "Setting up…" }),
     ).toBeDisabled();
-    // The dev-mode companion hint appears in the browser phase while it waits.
-    await expect(
-      page.getByText("Dev build: load the unpacked companion", {
-        exact: false,
-      }),
-    ).toBeVisible();
-
-    await expect.poll(() => callsFor(page, "set_auto_pair")).toHaveLength(1);
-    expect(await callsFor(page, "set_auto_pair")).toEqual([
-      { command: "set_auto_pair", args: { enabled: true } },
-    ]);
     await expect.poll(() => callsFor(page, "configure_agent")).toHaveLength(1);
     expect(await callsFor(page, "configure_agent")).toEqual([
       { command: "configure_agent", args: { agentId: "vscode" } },
     ]);
 
-    // The backend (not this UI) approves pairings while armed; the UI only
-    // reacts to the resulting paired state.
-    await patchStatus(page, {
-      pendingPairings: [],
-      pairedBrowsers: [{ id: requestId, name: "Chrome" }],
-    });
     await expect
       .poll(() => page.evaluate(() => window.__onboardingMock.status.completed))
       .toBe(true);
     expect(await callsFor(page, "finish_setup")).toHaveLength(1);
-    expect(await callsFor(page, "approve_pairing")).toHaveLength(0);
   });
 
   test("incomplete state blocks the button and shows errors", async ({
@@ -248,10 +195,6 @@ test.describe("Onboarding UI — one-click setup, simulated native IPC", () => {
     await expect
       .poll(() => callsFor(page, "plugin:window|hide"))
       .toHaveLength(1);
-    await expect.poll(() => callsFor(page, "set_auto_pair")).toHaveLength(1);
-    expect(await callsFor(page, "set_auto_pair")).toEqual([
-      { command: "set_auto_pair", args: { enabled: false } },
-    ]);
     expect(await callsFor(page, "configure_agent")).toHaveLength(0);
     expect(
       await page.evaluate(() => window.__onboardingMock.status.completed),

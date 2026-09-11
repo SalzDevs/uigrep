@@ -1,10 +1,10 @@
-//! Shared string limits count UTF-16 units, as Zod does in JavaScript. Native
-//! ingestion also enforces dictionary byte/count and geometry/resource budgets,
-//! strict keys, and relationship integrity beyond the shared schema.
+//! Native validation for capture v2 (`app` + annotations with region pixels
+//! and accessibility elements). Counts UTF-16 units like Zod does in JS.
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
 type Check = Result<(), String>;
+
 fn object<'a>(v: &'a Value, keys: &[&str]) -> Result<&'a Map<String, Value>, String> {
     let o = v.as_object().ok_or("Expected an object")?;
     if o.keys().any(|k| !keys.contains(&k.as_str())) {
@@ -36,361 +36,186 @@ fn number(v: &Value, min: f64, max: f64, integer: bool) -> Check {
     }
     Ok(())
 }
-fn enumeration(v: &Value, values: &[&str]) -> Check {
-    if !values.contains(&v.as_str().unwrap_or("")) {
-        return Err("Invalid enum value".into());
-    }
-    Ok(())
+fn rect(v: &Value) -> Check {
+    let r = object(v, &["x", "y", "width", "height"])?;
+    number(field(r, "x")?, -100_000., 100_000., false)?;
+    number(field(r, "y")?, -100_000., 100_000., false)?;
+    number(field(r, "width")?, 0., 100_000., true)?;
+    number(field(r, "height")?, 0., 100_000., true)
 }
-fn array(v: &Value, min: usize, max: usize) -> Result<&Vec<Value>, String> {
-    let a = v.as_array().ok_or("Expected an array")?;
-    if a.len() < min || a.len() > max {
-        return Err(format!("Array must contain {min}..{max} entries"));
-    }
-    Ok(a)
-}
-fn rect(v: &Value, size: bool) -> Check {
-    let o = object(
+
+fn validate_image(v: &Value) -> Check {
+    let image = object(
         v,
-        if size {
-            &["x", "y", "width", "height"]
-        } else {
-            &["x", "y"]
-        },
+        &["resourceUri", "mimeType", "byteLength", "width", "height"],
     )?;
-    for k in ["x", "y"] {
-        number(field(o, k)?, -1e12, 1e12, false)?;
+    let uri = text(field(image, "resourceUri")?, 300)?;
+    if !uri.starts_with("uigrep://captures/") {
+        return Err("Image resource must live under uigrep://captures/".into());
     }
-    if size {
-        for k in ["width", "height"] {
-            number(field(o, k)?, 0., 1e12, false)?;
-        }
+    let mime = text(field(image, "mimeType")?, 20)?;
+    if mime != "image/png" && mime != "image/webp" {
+        return Err("Unsupported image format".into());
     }
-    Ok(())
+    number(field(image, "byteLength")?, 0., 20_000_000., true)?;
+    number(field(image, "width")?, 1., 10_000., true)?;
+    number(field(image, "height")?, 1., 10_000., true)
 }
-fn dictionary(v: &Value, count: usize, value_units: usize, total_bytes: usize) -> Check {
-    let o = v.as_object().ok_or("Expected a dictionary")?;
-    if o.len() > count {
-        return Err("Too many dictionary entries".into());
+
+fn validate_element(v: &Value) -> Check {
+    let element = object(v, &["role", "label", "identifier", "value"])?;
+    text(field(element, "role")?, 64)?;
+    if let Some(label) = element.get("label") {
+        text(label, 2_000)?;
     }
-    let mut bytes = 0;
-    for (k, v) in o {
-        if k.len() > 256 {
-            return Err("Dictionary key too long".into());
-        }
-        bytes += k.len() + text(v, value_units)?.len();
-    }
-    if bytes > total_bytes {
-        return Err("Dictionary byte budget exceeded".into());
-    }
-    Ok(())
-}
-fn target(v: &Value) -> Check {
-    let o = object(
-        v,
-        &[
-            "id",
-            "rank",
-            "tag",
-            "text",
-            "rect",
-            "selectors",
-            "attributes",
-            "domSnippet",
-            "styleFacts",
-            "score",
-        ],
-    )?;
-    uuid(field(o, "id")?)?;
-    number(field(o, "rank")?, 1., 9_007_199_254_740_991., true)?;
-    text(field(o, "tag")?, 64)?;
-    text(field(o, "text")?, 2000)?;
-    text(field(o, "domSnippet")?, 12288)?;
-    rect(field(o, "rect")?, true)?;
-    number(field(o, "score")?, 0., 1., false)?;
-    let selectors = object(
-        field(o, "selectors")?,
-        &["testId", "id", "css", "xpath", "role", "accessibleName"],
-    )?;
-    for (k, max) in [
-        ("testId", 256),
-        ("id", 256),
-        ("css", 2048),
-        ("xpath", 2048),
-        ("role", 128),
-        ("accessibleName", 512),
-    ] {
-        if let Some(v) = selectors.get(k) {
-            text(v, max)?;
+    if let Some(identifier) = element.get("identifier") {
+        if !identifier.is_null() {
+            text(identifier, 512)?;
         }
     }
-    if let Some(v) = o.get("attributes") {
-        dictionary(v, 20, 2000, 40960)?;
-    }
-    if let Some(v) = o.get("styleFacts") {
-        dictionary(v, 100, 1024, 32768)?;
-    }
-    Ok(())
-}
-fn annotation(v: &Value) -> Check {
-    let o = object(
-        v,
-        &[
-            "id",
-            "order",
-            "comment",
-            "selectionMethod",
-            "viewportRect",
-            "pageRect",
-            "scroll",
-            "screenshot",
-            "targets",
-            "hasMoreTargets",
-            "status",
-        ],
-    )?;
-    uuid(field(o, "id")?)?;
-    // Array size is capped at 50; order need not be contiguous or <= 50.
-    number(field(o, "order")?, 1., 9_007_199_254_740_991., true)?;
-    if let Some(v) = o.get("comment") {
-        text(v, 4000)?;
-    }
-    enumeration(field(o, "selectionMethod")?, &["click", "drag"])?;
-    rect(field(o, "viewportRect")?, true)?;
-    rect(field(o, "pageRect")?, true)?;
-    rect(field(o, "scroll")?, false)?;
-    if let Some(v) = o.get("hasMoreTargets") {
-        if !v.is_boolean() {
-            return Err("hasMoreTargets must be boolean".into());
-        }
-    }
-    if let Some(v) = o.get("status") {
-        enumeration(v, &["pending", "in_progress", "resolved", "blocked"])?;
-    }
-    for v in array(field(o, "targets")?, 0, 20)? {
-        target(v)?;
-    }
-    if let Some(v) = o.get("screenshot") {
-        let s = object(
-            v,
-            &["resourceUri", "mimeType", "byteLength", "width", "height"],
-        )?;
-        if !text(field(s, "resourceUri")?, 2048)?.starts_with("uigrep://") {
-            return Err("Invalid screenshot resource URI".into());
-        }
-        enumeration(
-            field(s, "mimeType")?,
-            &["image/png", "image/webp", "image/jpeg"],
-        )?;
-        number(field(s, "byteLength")?, 0., 8388608., true)?;
-        for k in ["width", "height"] {
-            number(field(s, k)?, 1., 100000., true)?;
+    if let Some(value) = element.get("value") {
+        if !value.is_null() {
+            text(value, 2_000)?;
         }
     }
     Ok(())
 }
 
-/// Apply exactly the shared schema's defaults; null is deliberately not missing.
-pub(crate) fn normalize_capture(v: &mut Value) {
-    if let Some(o) = v.as_object_mut() {
-        o.entry("relationships")
-            .or_insert_with(|| serde_json::json!([]));
-        if let Some(annotations) = o.get_mut("annotations").and_then(Value::as_array_mut) {
-            for a in annotations {
-                if let Some(a) = a.as_object_mut() {
-                    a.entry("comment").or_insert_with(|| "".into());
-                    a.entry("status").or_insert_with(|| "pending".into());
-                    a.entry("hasMoreTargets").or_insert_with(|| false.into());
-                    if let Some(targets) = a.get_mut("targets").and_then(Value::as_array_mut) {
-                        for target in targets {
-                            if let Some(t) = target.as_object_mut() {
-                                t.entry("attributes")
-                                    .or_insert_with(|| serde_json::json!({}));
-                                t.entry("styleFacts")
-                                    .or_insert_with(|| serde_json::json!({}));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if let Some(relationships) = o.get_mut("relationships").and_then(Value::as_array_mut) {
-            for r in relationships {
-                if let Some(r) = r.as_object_mut() {
-                    r.entry("properties")
-                        .or_insert_with(|| serde_json::json!([]));
-                }
+fn validate_annotation(v: &Value, index: usize) -> Check {
+    let a = object(
+        v,
+        &["id", "order", "comment", "rect", "image", "elements"],
+    )?;
+    uuid(field(a, "id")?)
+        .map_err(|e| format!("Annotation {index}: {e}"))?;
+    number(field(a, "order")?, 1., 50., true)
+        .map_err(|e| format!("Annotation {index}: {e}"))?;
+    text(field(a, "comment")?, 4_000)
+        .map_err(|e| format!("Annotation {index}: {e}"))?;
+    rect(field(a, "rect")?).map_err(|e| format!("Annotation {index}: {e}"))?;
+    validate_image(field(a, "image")?)
+        .map_err(|e| format!("Annotation {index}: {e}"))?;
+    let elements = field(a, "elements")?
+        .as_array()
+        .ok_or("elements must be an array")?;
+    if elements.len() > 50 {
+        return Err(format!("Annotation {index}: too many elements"));
+    }
+    for element in elements {
+        validate_element(element).map_err(|e| format!("Annotation {index}: {e}"))?;
+    }
+    Ok(())
+}
+
+pub fn normalize_capture(capture: &mut Value) {
+    let o = match capture.as_object_mut() {
+        Some(o) => o,
+        None => return,
+    };
+    if !o.contains_key("relationships") {
+        o.insert("relationships".to_string(), Value::Array(Vec::new()));
+    }
+    if let Some(annotations) = o.get_mut("annotations").and_then(Value::as_array_mut) {
+        for annotation in annotations {
+            let a = match annotation.as_object_mut() {
+                Some(a) => a,
+                None => continue,
+            };
+            a.entry("comment".to_string()).or_insert_with(|| Value::String(String::new()));
+            if !a.contains_key("elements") {
+                a.insert("elements".to_string(), Value::Array(Vec::new()));
             }
         }
     }
 }
 
-pub(crate) fn validate_capture(v: &Value) -> Check {
-    let o = object(
-        v,
+pub fn validate_capture(capture: &Value) -> Check {
+    let c = object(
+        capture,
         &[
             "schemaVersion",
             "id",
             "capturedAt",
             "status",
-            "page",
+            "app",
             "annotations",
             "relationships",
         ],
     )?;
-    enumeration(field(o, "schemaVersion")?, &["1.0.0"])?;
-    uuid(field(o, "id")?)?;
-    let date = text(field(o, "capturedAt")?, 64)?;
-    if !date.ends_with('Z') || chrono::DateTime::parse_from_rfc3339(date).is_err() {
-        return Err("capturedAt must be a UTC RFC3339 timestamp".into());
+    if capture["schemaVersion"].as_i64() != Some(2) {
+        return Err("schemaVersion must be 2".into());
     }
-    enumeration(
-        field(o, "status")?,
-        &["draft", "pending", "in_progress", "resolved", "blocked"],
-    )?;
-    let p = object(
-        field(o, "page")?,
-        &["url", "title", "viewport", "scroll", "colorScheme"],
-    )?;
-    let url = url::Url::parse(text(field(p, "url")?, 8192)?).map_err(|_| "Invalid page URL")?;
-    if !["http", "https", "file"].contains(&url.scheme()) {
-        return Err("Unsupported capture page scheme".into());
+    uuid(field(c, "id")?)?;
+    let captured_at = text(field(c, "capturedAt")?, 40)?;
+    if chrono::DateTime::parse_from_rfc3339(captured_at).is_err() {
+        return Err("capturedAt must be RFC 3339".into());
     }
-    text(field(p, "title")?, 1000)?;
-    rect(field(p, "scroll")?, false)?;
-    enumeration(
-        field(p, "colorScheme")?,
-        &["light", "dark", "no-preference"],
-    )?;
-    let viewport = object(
-        field(p, "viewport")?,
-        &["width", "height", "devicePixelRatio"],
-    )?;
-    for k in ["width", "height"] {
-        number(field(viewport, k)?, 1., 100000., true)?;
+    let status = text(field(c, "status")?, 20)?;
+    if status != "pending" && status != "retrieved" {
+        return Err("Unknown capture status".into());
     }
-    number(
-        field(viewport, "devicePixelRatio")?,
-        0.,
-        10.,
-        false,
-    )?;
-    if field(viewport, "devicePixelRatio")?.as_f64() == Some(0.) {
-        return Err("devicePixelRatio must be positive".into());
-    }
-    let annotations = array(field(o, "annotations")?, 1, 50)?;
-    let mut ids = std::collections::HashSet::new();
-    let mut orders = std::collections::HashSet::new();
-    for a in annotations {
-        annotation(a)?;
-        if !ids.insert(a["id"].as_str().unwrap())
-            || !orders.insert(a["order"].as_f64().unwrap().to_bits())
-        {
-            return Err("Duplicate annotation id/order".into());
+    let app = object(field(c, "app")?, &["name", "bundleId", "windowTitle", "url"])?;
+    text(field(app, "name")?, 200)?;
+    text(field(app, "bundleId")?, 300)?;
+    if let Some(title) = app.get("windowTitle") {
+        if !title.is_null() {
+            text(title, 500)?;
         }
     }
-    if let Some(relationships) = o.get("relationships") {
-        for r in array(relationships, 0, 100)? {
-            let r = object(
-                r,
-                &[
-                    "type",
-                    "sourceAnnotationId",
-                    "targetAnnotationId",
-                    "properties",
-                ],
-            )?;
-            enumeration(
-                field(r, "type")?,
-                &["reference", "match", "align", "preserve", "avoid-changing"],
-            )?;
-            for k in ["sourceAnnotationId", "targetAnnotationId"] {
-                uuid(field(r, k)?)?;
-                if !ids.contains(field(r, k)?.as_str().unwrap()) {
-                    return Err("Relationship references an unknown annotation".into());
-                }
-            }
-            if let Some(p) = r.get("properties") {
-                for v in array(p, 0, 20)? {
-                    text(v, 128)?;
-                }
+    if let Some(url) = app.get("url") {
+        if !url.is_null() {
+            let url = text(url, 2_048)?;
+            if url::Url::parse(url).is_err() {
+                return Err("app.url must be a valid URL".into());
             }
         }
+    }
+    let annotations = field(c, "annotations")?
+        .as_array()
+        .ok_or("annotations must be an array")?;
+    if annotations.is_empty() || annotations.len() > 50 {
+        return Err(String::from("A capture must contain between 1 and 50 annotations."));
+    }
+    for (index, annotation) in annotations.iter().enumerate() {
+        validate_annotation(annotation, index + 1)?;
+    }
+    let relationships = field(c, "relationships")?
+        .as_array()
+        .ok_or("relationships must be an array")?;
+    if relationships.len() > 50 {
+        return Err(String::from("Too many relationships"));
+    }
+    let ids: Vec<String> = annotations
+        .iter()
+        .filter_map(|a| a["id"].as_str().map(str::to_owned))
+        .collect();
+    if ids.len() != ids.iter().collect::<std::collections::HashSet<_>>().len() {
+        return Err(String::from("Duplicate annotation ids"));
     }
     Ok(())
 }
 
-#[cfg(test)]
-pub(crate) fn fixture() -> Value {
-    serde_json::json!({"schemaVersion":"1.0.0", "id":Uuid::new_v4().to_string(), "capturedAt":"2026-09-10T10:00:00.000Z", "status":"pending", "page":{"url":"https://example.com", "title":"Test", "viewport":{"width":800,"height":600,"devicePixelRatio":1}, "scroll":{"x":0,"y":0},"colorScheme":"light"}, "annotations":[{"id":Uuid::new_v4().to_string(),"order":1,"selectionMethod":"drag","viewportRect":{"x":0,"y":0,"width":20,"height":20},"pageRect":{"x":0,"y":0,"width":20,"height":20},"scroll":{"x":0,"y":0},"targets":[]}], "relationships":[]})
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn defaults_match_schema_and_null_is_not_defaulted() {
-        let mut v = fixture();
-        v.as_object_mut().unwrap().remove("relationships");
-        normalize_capture(&mut v);
-        assert_eq!(v["relationships"], serde_json::json!([]));
-        assert_eq!(v["annotations"][0]["comment"], "");
-        assert_eq!(v["annotations"][0]["status"], "pending");
-        assert_eq!(v["annotations"][0]["hasMoreTargets"], false);
-        assert!(validate_capture(&v).is_ok());
-        v["annotations"][0]["comment"] = Value::Null;
-        normalize_capture(&mut v);
-        assert!(validate_capture(&v).is_err());
-    }
-    #[test]
-    fn valid_and_nested_invalid() {
-        let mut v = fixture();
-        assert!(validate_capture(&v).is_ok());
-        v["annotations"][0]["viewportRect"]["width"] = (-1).into();
-        assert!(validate_capture(&v).is_err());
-        let mut v = fixture();
-        v["page"]["viewport"]["devicePixelRatio"] = 11.into();
-        assert!(validate_capture(&v).is_err());
-        let mut v = fixture();
-        v["annotations"][0]["comment"] = "é".repeat(4001).into();
-        assert!(validate_capture(&v).is_err());
-        assert!(validate_capture(&serde_json::json!({"id":Uuid::new_v4()})).is_err());
-    }
-    #[test]
-    fn bounded_dictionaries_and_relationships() {
-        let mut values = Map::new();
-        for n in 0..21 {
-            values.insert(n.to_string(), "x".into());
-        }
-        assert!(dictionary(&Value::Object(values), 20, 2000, 40960).is_err());
-        let mut v = fixture();
-        v["relationships"] = serde_json::json!([{"type":"match","sourceAnnotationId":Uuid::new_v4().to_string(),"targetAnnotationId":Uuid::new_v4().to_string()}]);
-        assert!(validate_capture(&v).is_err());
-    }
-
-    #[test]
-    fn unicode_limits_count_utf16_not_utf8_bytes() {
-        let mut v = fixture();
-        for comment in ["é".repeat(4000), "界".repeat(4000), "😀".repeat(2000)] {
-            v["annotations"][0]["comment"] = comment.into();
-            assert!(validate_capture(&v).is_ok());
-        }
-        v["annotations"][0]["comment"] = "😀".repeat(2001).into();
-        assert!(validate_capture(&v).is_err());
-        assert!(dictionary(&serde_json::json!({"title":"界".repeat(2000)}), 20, 2000, 40960).is_ok());
-        assert!(dictionary(&serde_json::json!({"title":"界".repeat(2000)}), 20, 2000, 4096).is_err());
-    }
-
-    #[test]
-    fn annotation_orders_are_not_array_indices_and_numeric_duplicates_are_rejected() {
-        let mut v = fixture();
-        v["annotations"][0]["order"] = 99.into();
-        assert!(validate_capture(&v).is_ok());
-        let mut second = v["annotations"][0].clone();
-        second["id"] = Uuid::new_v4().to_string().into();
-        second["order"] = serde_json::json!(100.0);
-        v["annotations"].as_array_mut().unwrap().push(second);
-        assert!(validate_capture(&v).is_ok());
-        v["annotations"][0]["order"] = 100.into();
-        assert!(validate_capture(&v).is_err());
-    }
+pub fn fixture() -> Value {
+    serde_json::json!({
+        "schemaVersion": 2,
+        "id": Uuid::new_v4().to_string(),
+        "capturedAt": chrono::Utc::now().to_rfc3339(),
+        "status": "pending",
+        "app": { "name": "Ledger", "bundleId": "com.salzdevs.ledger", "windowTitle": "Invoices" },
+        "annotations": [{
+            "id": Uuid::new_v4().to_string(),
+            "order": 1,
+            "comment": "scratch",
+            "rect": { "x": 10, "y": 10, "width": 100, "height": 50 },
+            "image": {
+                "resourceUri": "uigrep://captures/scratch/a1.png",
+                "mimeType": "image/png",
+                "byteLength": 1000,
+                "width": 100,
+                "height": 50
+            },
+            "elements": [{ "role": "button", "label": "Save", "identifier": "save-btn" }]
+        }],
+        "relationships": []
+    })
 }

@@ -39,6 +39,20 @@
         "visible": false,
         "center": true,
         "backgroundColor": "#0c111b"
+      },
+      {
+        "label": "capture",
+        "title": "uigrep capture",
+        "url": "index.html?view=capture",
+        "width": 1280,
+        "height": 800,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "fullscreen": true
       }
     ],
     "security": {
@@ -46,7 +60,9 @@
     }
   },
   "bundle": {
-    "resources": { "runtime/": "runtime/" },
+    "resources": {
+      "runtime/": "runtime/"
+    },
     "active": true,
     "targets": "all",
     "icon": [
