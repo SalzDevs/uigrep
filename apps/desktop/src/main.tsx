@@ -2,7 +2,12 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  getCurrentWindow,
+  cursorPosition,
+  availableMonitors,
+  PhysicalPosition,
+} from "@tauri-apps/api/window";
 import { Setup } from "./Setup";
 import { CaptureOverlay } from "./CaptureOverlay";
 import "./styles.css";
@@ -63,6 +68,62 @@ function Pill(): React.JSX.Element {
           : labels[state.kind];
 
   const dragOrigin = React.useRef<{ x: number; y: number } | null>(null);
+
+  // Follow the user across displays and spaces: when the cursor settles on a
+  // different display than the notch, glide the notch there (same relative
+  // position, clamped). CanJoinAllSpaces handles spaces; this handles displays.
+  React.useEffect(() => {
+    if (state.kind === "starting") return;
+    const sync = async () => {
+      try {
+        const win = getCurrentWindow();
+        const [cursor, monitors, pos, size] = await Promise.all([
+          cursorPosition(),
+          availableMonitors(),
+          win.outerPosition(),
+          win.outerSize(),
+        ]);
+        const at = (p: { x: number; y: number }) =>
+          monitors.find(
+            (m) =>
+              p.x >= m.position.x &&
+              p.x < m.position.x + m.size.width &&
+              p.y >= m.position.y &&
+              p.y < m.position.y + m.size.height,
+          );
+        const pillMonitor = at({ x: pos.x, y: pos.y });
+        const cursorMonitor = at(cursor);
+        if (!pillMonitor || !cursorMonitor || pillMonitor === cursorMonitor)
+          return;
+        const relX = (pos.x - pillMonitor.position.x) / pillMonitor.size.width;
+        const relY = (pos.y - pillMonitor.position.y) / pillMonitor.size.height;
+        const x =
+          cursorMonitor.position.x +
+          Math.round(relX * cursorMonitor.size.width);
+        const y =
+          cursorMonitor.position.y +
+          Math.round(relY * cursorMonitor.size.height);
+        await win.setPosition(
+          new PhysicalPosition(
+            Math.min(
+              Math.max(x, cursorMonitor.position.x),
+              cursorMonitor.position.x + cursorMonitor.size.width - size.width,
+            ),
+            Math.min(
+              Math.max(y, cursorMonitor.position.y),
+              cursorMonitor.position.y +
+                cursorMonitor.size.height -
+                size.height,
+            ),
+          ),
+        );
+      } catch {
+        /* poll again */
+      }
+    };
+    const timer = setInterval(() => void sync(), 800);
+    return () => clearInterval(timer);
+  }, [state.kind]);
 
   return (
     <button
