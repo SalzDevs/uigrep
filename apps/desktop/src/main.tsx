@@ -60,7 +60,7 @@ function Pill(): React.JSX.Element {
         ? "Capturing…"
         : state.kind === "sent"
           ? "Capture saved"
-          : labels[state.kind as keyof typeof labels];
+          : labels[state.kind];
 
   return (
     <button
