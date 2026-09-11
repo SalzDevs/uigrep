@@ -444,6 +444,25 @@ async fn submit_capture(
     Ok(())
 }
 
+// Mark the window to appear on every macOS space (including fullscreen
+// apps). Tauri does not expose NSWindow collection behavior.
+#[cfg(target_os = "macos")]
+fn float_over_all_spaces(window: &tauri::WebviewWindow) -> Result<(), String> {
+    use objc2::runtime::AnyObject;
+    let ns_window = window.ns_window().map_err(|e| e.to_string())? as *mut AnyObject;
+    if ns_window.is_null() {
+        return Err("Window has no NSWindow handle.".into());
+    }
+    // NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary
+    const CAN_JOIN_ALL_SPACES: u64 = 1 << 0;
+    const FULL_SCREEN_AUXILIARY: u64 = 1 << 8;
+    let behavior: u64 = CAN_JOIN_ALL_SPACES | FULL_SCREEN_AUXILIARY;
+    unsafe {
+        let _: () = objc2::msg_send![ns_window, setCollectionBehavior: behavior];
+    }
+    Ok(())
+}
+
 fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
     // Created lazily on first trigger: a hidden fullscreen transparent window
     // flashes opaque black on macOS during creation.
@@ -491,6 +510,7 @@ fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         if let Some(capture) = app.get_webview_window("capture") {
             let _ = capture.set_background_color(Some(Color(0, 0, 0, 0)));
+            float_over_all_spaces(&capture)?;
         }
     }
     let _ = app.emit("pill-state", PillState::Selecting);
@@ -559,7 +579,10 @@ pub fn run() {
                         == tauri_plugin_global_shortcut::ShortcutState::Pressed
                         && shortcut.to_string().replace(' ', "") == "Option+Shift+G"
                     {
-                        let _ = show_capture_overlay(app);
+                        if let Err(error) = show_capture_overlay(app) {
+                            eprintln!("[uigrep] capture trigger failed: {error}");
+                            let _ = app.emit("pill-state", PillState::Error { message: format!("Capture failed to start: {error}") });
+                        }
                     }
                 })
                 .build(),
@@ -635,9 +658,11 @@ pub fn run() {
             {
                 if let Some(pill) = app.get_webview_window("pill") {
                     let _ = pill.set_background_color(Some(Color(0, 0, 0, 0)));
+                    let _ = float_over_all_spaces(&pill);
                 }
                 if let Some(capture) = app.get_webview_window("capture") {
                     let _ = capture.set_background_color(Some(Color(0, 0, 0, 0)));
+                    let _ = float_over_all_spaces(&capture);
                 }
             }
             if first_run {

@@ -4395,6 +4395,7 @@ dependencies = [
  "chrono",
  "futures-util",
  "http",
+ "objc2",
  "open",
  "rusqlite",
  "serde",
