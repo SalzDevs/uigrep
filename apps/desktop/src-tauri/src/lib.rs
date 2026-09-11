@@ -463,6 +463,16 @@ fn float_over_all_spaces(window: &tauri::WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+fn capture_shortcut() -> tauri_plugin_global_shortcut::Shortcut {
+    use std::sync::OnceLock;
+    static SHORTCUT: OnceLock<tauri_plugin_global_shortcut::Shortcut> = OnceLock::new();
+    *SHORTCUT.get_or_init(|| {
+        CAPTURE_SHORTCUT
+            .parse()
+            .expect("CAPTURE_SHORTCUT must parse as a global shortcut")
+    })
+}
+
 fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
     // Created lazily on first trigger: a hidden fullscreen transparent window
     // flashes opaque black on macOS during creation.
@@ -575,9 +585,11 @@ pub fn run() {
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
+                    // Compare parsed shortcuts: `shortcut.to_string()` renders
+                    // as "alt+shift+KeyG", never as the source spelling.
                     if event.state
                         == tauri_plugin_global_shortcut::ShortcutState::Pressed
-                        && shortcut.to_string().replace(' ', "") == "Option+Shift+G"
+                        && *shortcut == capture_shortcut()
                     {
                         if let Err(error) = show_capture_overlay(app) {
                             eprintln!("[uigrep] capture trigger failed: {error}");
