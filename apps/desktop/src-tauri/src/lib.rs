@@ -447,14 +447,32 @@ async fn submit_capture(
 fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
     // Created lazily on first trigger: a hidden fullscreen transparent window
     // flashes opaque black on macOS during creation.
-    if app.get_webview_window("capture").is_none() {
-        let monitor = app
+    let monitor = match app.cursor_position().ok().and_then(|cursor| {
+        app.available_monitors()
+            .ok()
+            .and_then(|monitors| {
+                monitors
+                    .into_iter()
+                    .find(|monitor| {
+                        let position = monitor.position();
+                        let size = monitor.size();
+                        cursor.x >= f64::from(position.x)
+                            && cursor.x < f64::from(position.x + size.width as i32)
+                            && cursor.y >= f64::from(position.y)
+                            && cursor.y < f64::from(position.y + size.height as i32)
+                    })
+            })
+    }) {
+        Some(monitor) => monitor,
+        None => app
             .primary_monitor()
             .map_err(|e| e.to_string())?
-            .ok_or("No primary display found.")?;
-        let scale = monitor.scale_factor();
-        let size = monitor.size().to_logical::<f64>(scale);
-        let position = monitor.position().to_logical::<f64>(scale);
+            .ok_or("No display found.")?,
+    };
+    let scale = monitor.scale_factor();
+    let size = monitor.size().to_logical::<f64>(scale);
+    let position = monitor.position().to_logical::<f64>(scale);
+    if app.get_webview_window("capture").is_none() {
         tauri::WebviewWindowBuilder::new(
             app,
             "capture",
@@ -479,6 +497,13 @@ fn show_capture_overlay(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("capture")
         .ok_or("The capture overlay is missing from this build.")?;
+    // Follow the cursor's display: reposition + resize before showing.
+    window
+        .set_position(tauri::LogicalPosition::new(position.x, position.y))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_size(tauri::LogicalSize::new(size.width, size.height))
+        .map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())
 }
